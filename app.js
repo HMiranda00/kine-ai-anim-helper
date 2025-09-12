@@ -30,6 +30,7 @@ let imageHistory = []; // Store generated images for reuse
 let activeCanvas = 'start'; // 'start' or 'end' - which canvas is selected
 let appState = 'initial'; // 'initial', 'single', 'dual'
 let currentVideo = null; // Store current video URL
+let lastVideoSize = null; // Store last video player pixel dimensions {width,height}
 let globalAspectRatio = '1:1'; // Global aspect ratio setting
 let globalResolution = 'regular'; // Global resolution setting
 
@@ -146,13 +147,14 @@ function updateUIState() {
       break;
       
     case 'single':
-      // Estado 1 - um canvas + placeholder
+      // Mostrar ambos canvas; o vazio fica clicável e com fundo
       canvasArea.style.display = 'flex';
-      startFrame.style.display = canvasImages.start ? 'block' : 'none';
-      endFrame.style.display = canvasImages.end ? 'block' : 'none';
-      placeholder.style.display = 'block';
+      startFrame.style.display = 'block';
+      endFrame.style.display = 'block';
+      placeholder.style.display = 'none';
       modeToggle.style.display = 'none';
-      videoPreview.style.display = 'none';
+      // Em modo vídeo, mostramos o player mesmo sem vídeo (com ratio global)
+      videoPreview.style.display = currentMode === 'video' ? 'block' : 'none';
       break;
       
     case 'dual':
@@ -162,8 +164,8 @@ function updateUIState() {
       endFrame.style.display = 'block';
       placeholder.style.display = 'none';
       modeToggle.style.display = 'flex';
-      // Show video preview if we have a video
-      videoPreview.style.display = currentVideo ? 'block' : 'none';
+      // Mostrar player em modo vídeo (mesmo sem vídeo)
+      videoPreview.style.display = currentMode === 'video' ? 'block' : 'none';
       break;
   }
   
@@ -197,6 +199,43 @@ function updateUIState() {
   // Estado 3 - histórico aparece após 2+ imagens
   historyElement.style.display = imageHistory.length >= 2 ? 'block' : 'none';
   updateHistoryDisplay();
+
+  // Atualiza dimensões do player de vídeo para acompanhar canvases/ratio
+  updateVideoDimensions();
+}
+
+function updateVideoDimensions() {
+  const videoPreview = document.getElementById('videoPreview');
+  const videoPlayer = document.getElementById('videoPlayer');
+  if (!videoPreview || !videoPlayer) return;
+
+  // If we have a last video size, keep it
+  if (currentVideo && lastVideoSize) {
+    videoPlayer.style.width = lastVideoSize.width + 'px';
+    videoPlayer.style.height = lastVideoSize.height + 'px';
+    videoPreview.style.width = lastVideoSize.width + 'px';
+    videoPreview.style.height = lastVideoSize.height + 'px';
+    return;
+  }
+
+  // Otherwise, match the canvas ratio (globalAspectRatio)
+  const [ratioW, ratioH] = globalAspectRatio.split(':').map(Number);
+  const targetAspectRatio = ratioW / ratioH;
+  const maxSize = 300;
+
+  let width, height;
+  if (targetAspectRatio >= 1) {
+    width = maxSize;
+    height = Math.round(maxSize / targetAspectRatio);
+  } else {
+    height = maxSize;
+    width = Math.round(maxSize * targetAspectRatio);
+  }
+
+  videoPlayer.style.width = width + 'px';
+  videoPlayer.style.height = height + 'px';
+  videoPreview.style.width = width + 'px';
+  videoPreview.style.height = height + 'px';
 }
 
 function updateActiveCanvas() {
@@ -746,6 +785,9 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Initialize canvas drop zones for history images
   initializeCanvasDropZones();
+
+  // Ensure video preview matches canvas ratio initially
+  updateVideoDimensions();
 });
 
 // Loading state management
@@ -886,6 +928,9 @@ function updateCanvasDimensions() {
       drawImageOnCanvas(canvasEnd, ctxEnd, endImageData);
     });
   }
+
+  // Atualiza também o player de vídeo para o mesmo ratio quando não há vídeo gerado
+  updateVideoDimensions();
 }
 
 // Initialize canvas drop zones for history images and external files
@@ -1258,6 +1303,7 @@ async function editImage(prompt) {
 async function generateVideo(prompt) {
   const playBtn = document.getElementById('playBtn');
   const videoPreview = document.getElementById('videoPreview');
+  const videoPlayer = document.getElementById('videoPlayer');
   
   try {
     if (!canvasDisplayImages.start || !canvasDisplayImages.end) {
@@ -1291,10 +1337,17 @@ async function generateVideo(prompt) {
     const outputs = await replicateRun('bytedance/seedance-1-lite', input);
     const videoUrl = Array.isArray(outputs) ? outputs[0] : outputs;
     
-    // Show video in preview canvas
-    const videoPlayer = document.getElementById('videoPlayer');
+    // Show video with current dimensions; and fix size as last output
     videoPlayer.src = videoUrl;
     currentVideo = videoUrl;
+    if (videoPlayer.videoWidth && videoPlayer.videoHeight) {
+      lastVideoSize = { width: videoPlayer.clientWidth, height: videoPlayer.clientHeight };
+    } else {
+      // After metadata loads, capture size
+      videoPlayer.onloadedmetadata = () => {
+        lastVideoSize = { width: videoPlayer.clientWidth, height: videoPlayer.clientHeight };
+      };
+    }
     
     console.log('Video generated successfully:', videoUrl);
     updateUIState();
