@@ -8,149 +8,111 @@
   <meta name="color-scheme" content="dark light">
 </head>
 <body>
-  <header>
-    <h1>Kine AI Anim Helper</h1>
-    <div class="auth"></div>
-  </header>
-
-  <main>
-    <section class="frames">
-      <h2>Frames</h2>
-      <div class="frames-grid">
-        <div class="frame">
-          <h3>Start frame</h3>
-          <canvas id="canvasStart" width="640" height="360"></canvas>
-          <div class="actions">
-            <input id="uploadStart" type="file" accept="image/*">
-            <button id="clearStart">Clear</button>
-          </div>
-        </div>
-        <div class="frame">
-          <h3>End frame</h3>
-          <canvas id="canvasEnd" width="640" height="360"></canvas>
-          <div class="actions">
-            <input id="uploadEnd" type="file" accept="image/*">
-            <button id="clearEnd">Clear</button>
-          </div>
-        </div>
+  <main class="app-container">
+    <!-- Drag & Drop Overlay -->
+    <div class="drag-overlay" id="dragOverlay" style="display: none;">
+      <div class="drag-content">
+        <div class="drag-icon">📁</div>
+        <div class="drag-text">Drop image to add as Start Frame</div>
       </div>
-    </section>
-
-    <section class="models">
-      <h2>Modelos</h2>
-      <details open>
-        <summary>Seedream-3 — gerar imagem (bytedance/seedream-3)</summary>
-        <div class="card">
-          <label>Prompt <input id="sd3Prompt" type="text" placeholder="Describe the image..."></label>
-          <div class="row">
-            <label>Aspect ratio
-              <select id="sd3AR">
-                <option>16:9</option>
-                <option>9:16</option>
-                <option>1:1</option>
-                <option>4:3</option>
-                <option>3:4</option>
-                <option>2:3</option>
-                <option>3:2</option>
-                <option>21:9</option>
-                <option>custom</option>
-              </select>
-            </label>
-            <label>Size
-              <select id="sd3Size">
-                <option value="regular" selected>regular</option>
-                <option value="small">small</option>
-                <option value="big">big</option>
-              </select>
-            </label>
-            <label>Width <input id="sd3W" type="number" min="512" max="2048" value="2048"></label>
-            <label>Height <input id="sd3H" type="number" min="512" max="2048" value="2048"></label>
-            <label>Guidance <input id="sd3GS" type="number" min="1" max="10" step="0.1" value="2.5"></label>
-            <label>Seed <input id="sd3Seed" type="number" placeholder="optional"></label>
-          </div>
-          <div class="row">
-            <button id="sd3Generate">Generate image</button>
-            <button id="sd3ToStart">Set as start frame</button>
-            <button id="sd3ToEnd">Set as end frame</button>
-            <a class="link" target="_blank" rel="noopener" href="https://replicate.com/bytedance/seedream-3/api/schema">Schema</a>
-          </div>
-          <div class="outputs" id="sd3Outputs"></div>
-        </div>
-      </details>
-
-      <details>
-        <summary>Nano-Banana — editar imagem (google/nano-banana)</summary>
-        <div class="card">
-          <label>Prompt <input id="nbPrompt" type="text" placeholder="Describe the edit..."></label>
-          <div class="row">
-            <label>Output format
-              <select id="nbFmt">
-                <option>jpg</option>
-                <option>png</option>
-              </select>
-            </label>
-            <div class="pickers">
-              <button id="nbUseStart">Use start frame</button>
-              <button id="nbUseEnd">Use end frame</button>
-              <input id="nbUpload" type="file" accept="image/*" multiple>
+    </div>
+    
+    <!-- Canvas area - initially hidden -->
+    <div class="canvas-area" id="canvasArea" style="display: none;">
+      <div class="canvas-container">
+        <div class="canvas-frame active" id="startFrame" style="display: none;">
+          <canvas id="canvasStart" width="512" height="512"></canvas>
+          <div class="canvas-upload-btn" id="startUpload">+</div>
+          <div class="frame-controls">
+            <div class="frame-indicator">
+              <div class="indicator-dot active"></div>
+              <span class="frame-label">Start</span>
+              <div class="indicator-dot"></div>
             </div>
           </div>
-          <div class="row">
-            <button id="nbEdit">Run edit</button>
-            <button id="nbToStart">Set as start frame</button>
-            <button id="nbToEnd">Set as end frame</button>
-            <a class="link" target="_blank" rel="noopener" href="https://replicate.com/google/nano-banana/api/schema">Schema</a>
-          </div>
-          <div class="outputs" id="nbOutputs"></div>
         </div>
-      </details>
+        
+        <div class="canvas-frame" id="endFrame" style="display: none;">
+          <canvas id="canvasEnd" width="512" height="512"></canvas>
+          <div class="canvas-upload-btn" id="endUpload">+</div>
+          <div class="frame-controls">
+            <div class="frame-indicator">
+              <div class="indicator-dot"></div>
+              <span class="frame-label">End</span>
+              <div class="indicator-dot active"></div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Placeholder for second canvas -->
+        <div class="canvas-placeholder" id="canvasPlaceholder" style="display: none;">
+          <div class="placeholder-content">
+            <div class="placeholder-icon">+</div>
+            <span>Add End Frame</span>
+          </div>
+        </div>
+        
+        <!-- Video preview canvas -->
+        <div class="video-preview" id="videoPreview" style="display: none;">
+          <video id="videoPlayer" width="300" height="300" controls muted loop playsinline></video>
+          <div class="video-label">Video Preview</div>
+        </div>
+      </div>
+      
+      <!-- Image History -->
+      <div class="image-history" id="imageHistory" style="display: none;">
+        <div class="history-grid" id="historyGrid"></div>
+      </div>
+    </div>
 
-      <details>
-        <summary>Seedance-1-lite — gerar vídeo (bytedance/seedance-1-lite)</summary>
-        <div class="card">
-          <label>Prompt <input id="sdvPrompt" type="text" placeholder="Describe the motion..."></label>
-          <div class="row">
-            <label>Duration (3-12) <input id="sdvDur" type="number" min="3" max="12" value="5"></label>
-            <label>Resolution
-              <select id="sdvRes">
-                <option>720p</option>
-                <option>480p</option>
-                <option>1080p</option>
-              </select>
-            </label>
-            <label>Aspect Ratio
-              <select id="sdvAR">
-                <option>16:9</option>
-                <option>4:3</option>
-                <option>1:1</option>
-                <option>3:4</option>
-                <option>9:16</option>
-                <option>21:9</option>
-                <option>9:21</option>
-              </select>
-            </label>
-            <label>Seed <input id="sdvSeed" type="number" placeholder="optional"></label>
-            <label><input id="sdvCamFixed" type="checkbox"> Camera fixed</label>
-          </div>
-          <div class="row">
-            <input id="sdvRefs" type="file" accept="image/*" multiple disabled title="Reference images disabled because start/end frames are required">
-          </div>
-          <div class="row">
-            <button id="sdvGenerate">Generate video</button>
-            <a class="link" target="_blank" rel="noopener" href="https://replicate.com/bytedance/seedance-1-lite/api/schema">Schema</a>
-          </div>
-          <div class="outputs" id="sdvOutputs"></div>
-        </div>
-      </details>
-    </section>
+    <!-- Settings pills - above prompt bar -->
+    <div class="settings-pills">
+      <div class="pill-group">
+        <select id="aspectRatioSelect" class="setting-pill">
+          <option value="1:1">1:1</option>
+          <option value="16:9">16:9</option>
+          <option value="4:3">4:3</option>
+          <option value="21:9">21:9</option>
+        </select>
+        
+        <button id="orientationToggle" class="orientation-toggle" title="Toggle Orientation">
+          <span class="orientation-icon">⟲</span>
+        </button>
+        
+        <select id="resolutionSelect" class="setting-pill">
+          <option value="small">480p</option>
+          <option value="regular">720p</option>
+          <option value="big">1080p</option>
+        </select>
+      </div>
+      
+      <!-- Mode toggle - initially hidden, only shows when both frames exist -->
+      <div class="mode-toggle" id="modeToggle" style="display: none;">
+        <button class="mode-btn active" data-mode="image">Image</button>
+        <button class="mode-btn" data-mode="video">Video</button>
+      </div>
+    </div>
+
+    <!-- Prompt bar -->
+    <div class="prompt-bar">
+      <div class="prompt-mode-toggle">
+        <button class="prompt-mode-btn active" data-mode="generate">Generate</button>
+        <button class="prompt-mode-btn" data-mode="edit">Edit</button>
+      </div>
+      
+      <input type="text" id="promptInput" placeholder="A cat in a hat..." />
+      <div class="prompt-files" id="promptFiles"></div>
+      <button class="add-btn" id="addBtn">+</button>
+      <button class="play-btn" id="playBtn">▶</button>
+    </div>
+
+    <!-- File inputs (hidden) -->
+    <input type="file" id="fileInput" accept="image/*" multiple style="display: none;" />
+    <input type="file" id="startFileInput" accept="image/*" style="display: none;" />
+    <input type="file" id="endFileInput" accept="image/*" style="display: none;" />
   </main>
 
-  <footer>
-    <p>Models: bytedance/seedream-3, google/nano-banana, bytedance/seedance-1-lite</p>
-  </footer>
-
   <script src="app.js"></script>
-  <script></script>
 </body>
 </html>
 
