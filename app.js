@@ -124,6 +124,11 @@ function updateUIState() {
   const modeToggle = document.getElementById('modeToggle');
   const historyElement = document.getElementById('imageHistory');
   const videoPreview = document.getElementById('videoPreview');
+  const startDeleteBtn = document.querySelector('#startFrame .btn-delete');
+  const endDeleteBtn = document.querySelector('#endFrame .btn-delete');
+  
+  // Toggle global class for video emphasis
+  document.body.classList.toggle('video-mode', currentMode === 'video');
   
   const hasStartImage = canvasDisplayImages.start !== null;
   const hasEndImage = canvasDisplayImages.end !== null;
@@ -131,6 +136,21 @@ function updateUIState() {
   // Determine app state
   if (!hasStartImage && !hasEndImage) {
     appState = 'initial';
+    // If both canvases are empty, force image mode to avoid being stuck in video mode
+    if (currentMode === 'video') {
+      currentMode = 'image';
+      // Sync UI bits: mode buttons, prompt placeholder, duration pill
+      const promptInput = document.getElementById('promptInput');
+      if (promptInput) {
+        promptInput.placeholder = promptMode === 'edit' ? 'make it look to its left side' : 'A cat in a hat...';
+      }
+      const modeBtns = document.querySelectorAll('.mode-btn');
+      modeBtns.forEach(b => b.classList.remove('active'));
+      const imageBtn = document.querySelector('.mode-btn[data-mode="image"]');
+      if (imageBtn) imageBtn.classList.add('active');
+      const durationPill = document.getElementById('durationPill');
+      if (durationPill) durationPill.style.display = 'none';
+    }
   } else if ((hasStartImage && !hasEndImage) || (!hasStartImage && hasEndImage)) {
     appState = 'single';
   } else if (hasStartImage && hasEndImage) {
@@ -140,10 +160,12 @@ function updateUIState() {
   // Update UI based on state
   switch(appState) {
     case 'initial':
-      // Estado inicial - nada aparece
-      canvasArea.style.display = 'none';
+      // Agora canvases sempre visíveis em estado vazio
+      canvasArea.style.display = 'flex';
+      startFrame.style.display = 'block';
+      endFrame.style.display = 'block';
       modeToggle.style.display = 'none';
-      videoPreview.style.display = 'none';
+      videoPreview.style.display = currentMode === 'video' ? 'block' : 'none';
       break;
       
     case 'single':
@@ -151,7 +173,7 @@ function updateUIState() {
       canvasArea.style.display = 'flex';
       startFrame.style.display = 'block';
       endFrame.style.display = 'block';
-      placeholder.style.display = 'none';
+      if (placeholder) placeholder.style.display = 'none';
       modeToggle.style.display = 'none';
       // Em modo vídeo, mostramos o player mesmo sem vídeo (com ratio global)
       videoPreview.style.display = currentMode === 'video' ? 'block' : 'none';
@@ -162,7 +184,7 @@ function updateUIState() {
       canvasArea.style.display = 'flex';
       startFrame.style.display = 'block';
       endFrame.style.display = 'block';
-      placeholder.style.display = 'none';
+      if (placeholder) placeholder.style.display = 'none';
       modeToggle.style.display = 'flex';
       // Mostrar player em modo vídeo (mesmo sem vídeo)
       videoPreview.style.display = currentMode === 'video' ? 'block' : 'none';
@@ -200,43 +222,15 @@ function updateUIState() {
   historyElement.style.display = imageHistory.length >= 2 ? 'block' : 'none';
   updateHistoryDisplay();
 
-  // Atualiza dimensões do player de vídeo para acompanhar canvases/ratio
-  updateVideoDimensions();
+  // Toggle delete action visibility only when a canvas has an image
+  if (startDeleteBtn) startDeleteBtn.style.display = canvasDisplayImages.start ? 'flex' : 'none';
+  if (endDeleteBtn) endDeleteBtn.style.display = canvasDisplayImages.end ? 'flex' : 'none';
+
+  // Recalcula layout responsivo para alinhar baselines e evitar rolagem
+  computeAndApplyResponsiveLayout();
 }
 
-function updateVideoDimensions() {
-  const videoPreview = document.getElementById('videoPreview');
-  const videoPlayer = document.getElementById('videoPlayer');
-  if (!videoPreview || !videoPlayer) return;
-
-  // If we have a last video size, keep it
-  if (currentVideo && lastVideoSize) {
-    videoPlayer.style.width = lastVideoSize.width + 'px';
-    videoPlayer.style.height = lastVideoSize.height + 'px';
-    videoPreview.style.width = lastVideoSize.width + 'px';
-    videoPreview.style.height = lastVideoSize.height + 'px';
-    return;
-  }
-
-  // Otherwise, match the canvas ratio (globalAspectRatio)
-  const [ratioW, ratioH] = globalAspectRatio.split(':').map(Number);
-  const targetAspectRatio = ratioW / ratioH;
-  const maxSize = 300;
-
-  let width, height;
-  if (targetAspectRatio >= 1) {
-    width = maxSize;
-    height = Math.round(maxSize / targetAspectRatio);
-  } else {
-    height = maxSize;
-    width = Math.round(maxSize * targetAspectRatio);
-  }
-
-  videoPlayer.style.width = width + 'px';
-  videoPlayer.style.height = height + 'px';
-  videoPreview.style.width = width + 'px';
-  videoPreview.style.height = height + 'px';
-}
+function updateVideoDimensions() { computeAndApplyResponsiveLayout(); }
 
 function updateActiveCanvas() {
   const startFrame = document.getElementById('startFrame');
@@ -425,14 +419,14 @@ async function addImageToCanvas(file, targetCanvas) {
     const replicateUrl = await replicateUpload(file);
     console.log('File uploaded successfully:', replicateUrl);
     
-    // Draw image immediately with final shimmer effect
+    // Draw image immediately with final shimmer effect (display only)
     if (targetCanvas === 'start') {
       await drawImageOnCanvas(canvasStart, ctxStart, url, false);
-      canvasImages.start = replicateUrl; // Replicate URL for AI models
+      canvasImages.start = replicateUrl; // Replicate URL or original for AI
       canvasDisplayImages.start = url; // Blob URL for display
     } else {
       await drawImageOnCanvas(canvasEnd, ctxEnd, url, false);
-      canvasImages.end = replicateUrl; // Replicate URL for AI models
+      canvasImages.end = replicateUrl; // Replicate URL or original for AI
       canvasDisplayImages.end = url; // Blob URL for display
     }
     
@@ -489,6 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Update placeholder and mode based on current mode
       const promptInput = document.getElementById('promptInput');
+      const durationPill = document.getElementById('durationPill');
       if (currentMode === 'video') {
         // Reset to generate mode for video
         const promptModeBtns = document.querySelectorAll('.prompt-mode-btn');
@@ -496,6 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelector('.prompt-mode-btn[data-mode="generate"]').classList.add('active');
         promptMode = 'generate';
         promptInput.placeholder = 'Cat running in the park...';
+        if (durationPill) durationPill.style.display = 'flex';
       } else {
         // Back to image mode - restore appropriate placeholder
         if (promptMode === 'edit') {
@@ -503,9 +499,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           promptInput.placeholder = 'A cat in a hat...';
         }
+        if (durationPill) durationPill.style.display = 'none';
       }
       
       updateUIState();
+
+      // Old video controls removed; duration now lives in pill group
     });
   });
   
@@ -537,24 +536,77 @@ document.addEventListener('DOMContentLoaded', () => {
     activeCanvas = 'end';
     updateActiveCanvas();
   });
-  
-  // Canvas placeholder click
-  document.getElementById('canvasPlaceholder').addEventListener('click', () => {
-    activeCanvas = 'end';
-    updateActiveCanvas();
-    // Show end frame area for interaction
-    if (appState === 'single') {
-      // Trigger placeholder to add end frame
-      document.getElementById('endFileInput').click();
-    }
+
+  // Image actions (download/delete) with event delegation
+  document.querySelectorAll('.canvas-frame').forEach(frame => {
+    frame.addEventListener('click', async (e) => {
+      if (e.target.closest('.btn-download')) {
+        e.stopPropagation();
+        const isStart = frame.id === 'startFrame';
+        // Prefer the original display URL (blob or remote). Fallback to canvasImages.
+        const srcUrl = isStart ? (canvasDisplayImages.start || canvasImages.start) : (canvasDisplayImages.end || canvasImages.end);
+        if (!srcUrl) return;
+
+        try {
+          let downloadUrl = srcUrl;
+          // If not a blob URL, fetch and convert to blob to preserve filename/control
+          if (!srcUrl.startsWith('blob:')) {
+            const res = await fetch(srcUrl, { mode: 'cors' });
+            const blob = await res.blob();
+            downloadUrl = URL.createObjectURL(blob);
+          }
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          const defaultName = isStart ? 'start-original' : 'end-original';
+          const extMatch = (srcUrl.split('?')[0] || '').match(/\.([a-zA-Z0-9]+)$/);
+          const ext = extMatch ? extMatch[1] : 'png';
+          a.download = `${defaultName}.${ext}`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          if (downloadUrl.startsWith('blob:') && downloadUrl !== srcUrl) {
+            URL.revokeObjectURL(downloadUrl);
+          }
+        } catch (_) {
+          // Silent fail; optionally show a toast later
+        }
+      } else if (e.target.closest('.btn-delete')) {
+        e.stopPropagation();
+        const isStart = frame.id === 'startFrame';
+        const canvas = isStart ? canvasStart : canvasEnd;
+        const ctx = isStart ? ctxStart : ctxEnd;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (isStart) { canvasImages.start = null; canvasDisplayImages.start = null; }
+        else { canvasImages.end = null; canvasDisplayImages.end = null; }
+        updateUIState();
+      }
+    });
   });
   
-  // Frame indicator toggles (the dots) - click on dots to toggle start/end
+  // Canvas placeholder click
+  const canvasPlaceholder = document.getElementById('canvasPlaceholder');
+  if (canvasPlaceholder) {
+    canvasPlaceholder.addEventListener('click', () => {
+      activeCanvas = 'end';
+      updateActiveCanvas();
+      // Show end frame area for interaction
+      if (appState === 'single') {
+        // Trigger placeholder to add end frame
+        document.getElementById('endFileInput').click();
+      }
+    });
+  }
+  
+  // Frame indicator toggles - click anywhere in indicator toggles start/end
   document.addEventListener('click', (e) => {
-    if (e.target.classList.contains('indicator-dot')) {
+    if (e.target.closest('.frame-indicator')) {
       e.stopPropagation();
       const frameElement = e.target.closest('.canvas-frame');
-      const isLeftDot = e.target === e.target.parentElement.querySelector('.indicator-dot:first-child');
+      // Toggle dependendo do frame e lado
+      const isStartFrame = frameElement.id === 'startFrame';
+      const isEndFrame = frameElement.id === 'endFrame';
+      // Se clicar no indicador do start, mover start->end; no do end, end->start (se houver imagem)
+      const isLeftDot = e.target.classList.contains('indicator-dot') && e.target === e.target.parentElement.querySelector('.indicator-dot:first-child');
       
       if (frameElement.id === 'startFrame') {
         if (!isLeftDot && canvasDisplayImages.start) { // Right dot clicked on start frame = move to end
@@ -787,7 +839,16 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeCanvasDropZones();
 
   // Ensure video preview matches canvas ratio initially
-  updateVideoDimensions();
+  computeAndApplyResponsiveLayout();
+
+  // Recompute on resize to avoid scrolling and keep baseline alignment
+  window.addEventListener('resize', () => {
+    computeAndApplyResponsiveLayout();
+  });
+
+  // Initial duration pill visibility based on mode
+  const durationPill = document.getElementById('durationPill');
+  if (durationPill) durationPill.style.display = currentMode === 'video' ? 'flex' : 'none';
 });
 
 // Loading state management
@@ -891,46 +952,108 @@ function animateCanvasChange(canvas, callback) {
 }
 
 // Update canvas dimensions and redraw with new aspect ratio
-function updateCanvasDimensions() {
+function updateCanvasDimensions() { computeAndApplyResponsiveLayout(); }
+
+// Compute responsive sizes so that the bottoms align and everything fits viewport
+function computeAndApplyResponsiveLayout() {
+  const videoPreview = document.getElementById('videoPreview');
+  const videoPlayer = document.getElementById('videoPlayer');
+  const footerBar = document.querySelector('.footer-bar');
+  const framesGroup = document.querySelector('.frames-group');
+  if (!videoPreview || !videoPlayer || !framesGroup) return;
+
   const [ratioW, ratioH] = globalAspectRatio.split(':').map(Number);
-  const targetAspectRatio = ratioW / ratioH;
-  const maxSize = 300;
-  
-  let canvasWidth, canvasHeight;
-  if (targetAspectRatio >= 1) {
-    canvasWidth = maxSize;
-    canvasHeight = Math.round(maxSize / targetAspectRatio);
+  const aspect = ratioW / ratioH;
+  const showVideo = currentMode === 'video';
+
+  // Available height = viewport - footer - top paddings/gaps
+  const footerH = footerBar ? footerBar.offsetHeight : 0;
+  const verticalPaddingAndGaps = 80; // app padding + canvas area gap approx
+  const availableH = Math.max(260, window.innerHeight - footerH - verticalPaddingAndGaps);
+
+  // Start with target video height and cap by available height
+  let videoH = Math.min(availableH, showVideo ? 720 : 560);
+  let videoW = Math.round(videoH * aspect);
+  if (showVideo) {
+    if (aspect >= 1) {
+      const maxVideoW = Math.floor(window.innerWidth * 0.52);
+      if (videoW > maxVideoW) {
+        videoW = maxVideoW;
+        videoH = Math.round(videoW / aspect);
+      }
+    } else {
+      const maxVideoH = Math.floor(availableH);
+      if (videoH > maxVideoH) videoH = maxVideoH;
+      videoW = Math.round(videoH * aspect);
+    }
   } else {
-    canvasHeight = maxSize;
-    canvasWidth = Math.round(maxSize * targetAspectRatio);
-  }
-  
-  // Store current display images before resizing
-  const startImageData = canvasDisplayImages.start;
-  const endImageData = canvasDisplayImages.end;
-  
-  // Update both canvas dimensions
-  [canvasStart, canvasEnd].forEach(canvas => {
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
-    canvas.style.width = canvasWidth + 'px';
-    canvas.style.height = canvasHeight + 'px';
-  });
-  
-  // Redraw existing images with fade animation
-  if (startImageData) {
-    animateCanvasChange(canvasStart, () => {
-      drawImageOnCanvas(canvasStart, ctxStart, startImageData);
-    });
-  }
-  if (endImageData) {
-    animateCanvasChange(canvasEnd, () => {
-      drawImageOnCanvas(canvasEnd, ctxEnd, endImageData);
-    });
+    // When video is hidden, we don't need to allocate width for it
+    videoW = 0;
   }
 
-  // Atualiza também o player de vídeo para o mesmo ratio quando não há vídeo gerado
-  updateVideoDimensions();
+  // Canvas base size proportional to video height
+  let canvasLarge = Math.round(videoH * 0.55);
+  // 15% larger when there is no player (image mode)
+  if (!showVideo) canvasLarge = Math.round(canvasLarge * 1.15);
+  if (!showVideo) canvasLarge = Math.min(canvasLarge, 520);
+
+  let canvasW, canvasH;
+  if (aspect >= 1) {
+    canvasW = canvasLarge;
+    canvasH = Math.max(160, Math.round(canvasLarge / aspect));
+  } else {
+    canvasH = canvasLarge;
+    canvasW = Math.max(160, Math.round(canvasLarge * aspect));
+  }
+
+  // Fit to viewport width considering two canvases + video + gaps
+  const leftGap = 18; // frames-group gap
+  const gridGap = 28; // canvas-container gap
+  let totalW = (canvasW * 2) + leftGap + (showVideo ? (gridGap + videoW) : 0);
+  const horizontalPadding = 40; // app-container side paddings
+  const availableW = window.innerWidth - horizontalPadding;
+  if (totalW > availableW) {
+    const scale = availableW / totalW;
+    videoW = Math.floor(videoW * scale);
+    videoH = Math.floor(videoH * scale);
+    canvasW = Math.floor(canvasW * scale);
+    canvasH = Math.floor(canvasH * scale);
+    totalW = availableW;
+  }
+
+  // Apply video sizes
+  if (showVideo) {
+    videoPreview.style.display = 'block';
+    videoPlayer.style.width = videoW + 'px';
+    videoPlayer.style.height = videoH + 'px';
+    videoPreview.style.width = videoW + 'px';
+    videoPreview.style.height = videoH + 'px';
+  } else {
+    videoPreview.style.display = 'none';
+  }
+
+  // Apply canvas sizes
+  [canvasStart, canvasEnd].forEach(canvas => {
+    canvas.width = canvasW;
+    canvas.height = canvasH;
+    canvas.style.width = canvasW + 'px';
+    canvas.style.height = canvasH + 'px';
+  });
+
+  // Redraw images to fit new sizes
+  const startImageData = canvasDisplayImages.start;
+  const endImageData = canvasDisplayImages.end;
+  if (startImageData) {
+    drawImageOnCanvas(canvasStart, ctxStart, startImageData);
+  }
+  if (endImageData) {
+    drawImageOnCanvas(canvasEnd, ctxEnd, endImageData);
+  }
+
+  // Remember last video size when a video is present
+  if (currentVideo) {
+    lastVideoSize = { width: videoW, height: videoH };
+  }
 }
 
 // Initialize canvas drop zones for history images and external files
@@ -1196,16 +1319,52 @@ function canvasToBlob(canvas) {
   });
 }
 
-// Upload cropped canvas image to Replicate
-async function uploadCanvasToReplicate(canvas) {
-  try {
-    const blob = await canvasToBlob(canvas);
-    const file = new File([blob], 'cropped-image.png', { type: 'image/png' });
-    return await replicateUpload(file);
-  } catch (error) {
-    console.error('Error uploading canvas to Replicate:', error);
-    throw error;
+// Crop from original source image to the target aspect ratio, keeping max native resolution (no downscale)
+async function uploadCroppedSourceToReplicate(slot /* 'start' | 'end' */) {
+  const displayUrl = slot === 'start' ? canvasDisplayImages.start : canvasDisplayImages.end;
+  if (!displayUrl) throw new Error('No image to crop for ' + slot);
+  const [ratioW, ratioH] = globalAspectRatio.split(':').map(Number);
+  const targetAR = ratioW / ratioH;
+
+  // Load original image at native resolution
+  const img = await new Promise((resolve, reject) => {
+    const i = new Image();
+    i.crossOrigin = 'anonymous';
+    i.onload = () => resolve(i);
+    i.onerror = reject;
+    i.src = displayUrl;
+  });
+
+  const srcW = img.naturalWidth || img.width;
+  const srcH = img.naturalHeight || img.height;
+  const srcAR = srcW / srcH;
+
+  let cropW, cropH, cropX, cropY;
+  if (srcAR > targetAR) {
+    // Source wider than target -> crop width
+    cropH = srcH;
+    cropW = Math.round(cropH * targetAR);
+    cropX = Math.round((srcW - cropW) / 2);
+    cropY = 0;
+  } else {
+    // Source taller than target -> crop height
+    cropW = srcW;
+    cropH = Math.round(cropW / targetAR);
+    cropX = 0;
+    cropY = Math.round((srcH - cropH) / 2);
   }
+
+  // Create offscreen canvas with the cropped native size (no scaling)
+  const off = document.createElement('canvas');
+  off.width = cropW;
+  off.height = cropH;
+  const offCtx = off.getContext('2d');
+  offCtx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+  // Encode as PNG to avoid quality loss
+  const blob = await new Promise((resolve) => off.toBlob(resolve, 'image/png'));
+  const file = new File([blob], `cropped-${slot}.png`, { type: 'image/png' });
+  return await replicateUpload(file);
 }
 
 async function generateImageForActiveCanvas(prompt) {
@@ -1219,10 +1378,12 @@ async function generateImageForActiveCanvas(prompt) {
     showButtonLoading(playBtn, 'Gerando...');
     showCanvasLoading(canvasFrame);
     
+    // Use highest quality available for Seedream-3 image generation
     const input = { 
       prompt, 
       aspect_ratio: globalAspectRatio,
-      size: globalResolution,
+      // override to highest quality for images regardless of dropdown
+      size: '1080p',
       guidance_scale: 2.5
     };
     
@@ -1278,12 +1439,15 @@ async function editImage(prompt) {
     
     // Get the active canvas and upload its cropped content
     const canvas = activeCanvas === 'start' ? canvasStart : canvasEnd;
-    const croppedImageUrl = await uploadCanvasToReplicate(canvas);
+    const croppedImageUrl = await uploadCroppedSourceToReplicate(activeCanvas);
     
+    // Highest quality settings for Nano-Banana (if supported)
     const input = {
       prompt,
       image_input: [croppedImageUrl],
-      output_format: 'png'
+      output_format: 'png',
+      quality: 'high',
+      upscale: true
     };
     
     const outputs = await replicateRun('google/nano-banana', input);
@@ -1304,6 +1468,7 @@ async function generateVideo(prompt) {
   const playBtn = document.getElementById('playBtn');
   const videoPreview = document.getElementById('videoPreview');
   const videoPlayer = document.getElementById('videoPlayer');
+  const durationInput = document.getElementById('videoDuration');
   
   try {
     if (!canvasDisplayImages.start || !canvasDisplayImages.end) {
@@ -1316,8 +1481,8 @@ async function generateVideo(prompt) {
     showGlobalLoading(videoPreview, 'Gerando vídeo...');
     
     // Upload cropped canvas images to Replicate
-    const startImageUrl = await uploadCanvasToReplicate(canvasStart);
-    const endImageUrl = await uploadCanvasToReplicate(canvasEnd);
+    const startImageUrl = await uploadCroppedSourceToReplicate('start');
+    const endImageUrl = await uploadCroppedSourceToReplicate('end');
     
     // Map resolution for video
     const videoResolution = globalResolution === 'big' ? '1080p' : 
@@ -1325,7 +1490,7 @@ async function generateVideo(prompt) {
     
     const input = {
       prompt,
-      duration: 5,
+      duration: Math.min(Math.max(parseInt(durationInput?.value || '5', 10), 1), 10),
       resolution: videoResolution,
       aspect_ratio: globalAspectRatio,
       camera_fixed: false,
@@ -1339,6 +1504,9 @@ async function generateVideo(prompt) {
     
     // Show video with current dimensions; and fix size as last output
     videoPlayer.src = videoUrl;
+    videoPlayer.loop = true;
+    videoPlayer.muted = true;
+    videoPlayer.play().catch(() => {});
     currentVideo = videoUrl;
     if (videoPlayer.videoWidth && videoPlayer.videoHeight) {
       lastVideoSize = { width: videoPlayer.clientWidth, height: videoPlayer.clientHeight };

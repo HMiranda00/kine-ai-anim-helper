@@ -17,12 +17,18 @@
       </div>
     </div>
     
-    <!-- Canvas area - initially hidden -->
-    <div class="canvas-area" id="canvasArea" style="display: none;">
+    <!-- Canvas area - always visible (empty canvases by default) -->
+    <div class="canvas-area" id="canvasArea">
       <div class="canvas-container">
-        <div class="canvas-frame active" id="startFrame" style="display: none;">
+        <div class="left-column">
+          <div class="frames-group">
+          <div class="canvas-frame active" id="startFrame">
           <canvas id="canvasStart" width="512" height="512"></canvas>
-          <div class="canvas-upload-btn" id="startUpload">+</div>
+          <div class="canvas-upload-btn" id="startUpload"><span class="icon icon-plus"></span></div>
+          <div class="image-actions">
+            <button class="action-btn btn-download" title="Download"><span class="icon icon-download"></span></button>
+            <button class="action-btn btn-delete" title="Delete"><span class="icon icon-delete"></span></button>
+          </div>
           <div class="frame-controls">
             <div class="frame-indicator">
               <div class="indicator-dot active"></div>
@@ -30,11 +36,15 @@
               <div class="indicator-dot"></div>
             </div>
           </div>
-        </div>
-        
-        <div class="canvas-frame" id="endFrame" style="display: none;">
+          </div>
+          
+          <div class="canvas-frame" id="endFrame">
           <canvas id="canvasEnd" width="512" height="512"></canvas>
-          <div class="canvas-upload-btn" id="endUpload">+</div>
+          <div class="canvas-upload-btn" id="endUpload"><span class="icon icon-plus"></span></div>
+          <div class="image-actions">
+            <button class="action-btn btn-download" title="Download"><span class="icon icon-download"></span></button>
+            <button class="action-btn btn-delete" title="Delete"><span class="icon icon-delete"></span></button>
+          </div>
           <div class="frame-controls">
             <div class="frame-indicator">
               <div class="indicator-dot"></div>
@@ -42,14 +52,9 @@
               <div class="indicator-dot active"></div>
             </div>
           </div>
-        </div>
-        
-        <!-- Placeholder for second canvas -->
-        <div class="canvas-placeholder" id="canvasPlaceholder" style="display: none;">
-          <div class="placeholder-content">
-            <div class="placeholder-icon">+</div>
-            <span>Add End Frame</span>
           </div>
+          </div>
+          
         </div>
         
         <!-- Video preview canvas -->
@@ -58,52 +63,62 @@
           <div class="video-label">Video Preview</div>
         </div>
       </div>
-      
-      <!-- Image History -->
+    </div>
+
+    <!-- Footer bar: history + global controls + prompt -->
+    <div class="footer-bar">
+      <!-- Image History (centered and grouped with prompt) -->
       <div class="image-history" id="imageHistory" style="display: none;">
         <div class="history-grid" id="historyGrid"></div>
       </div>
-    </div>
+      <div class="footer-controls">
+        <div class="settings-pills">
+          <div class="pill-group">
+            <select id="aspectRatioSelect" class="setting-pill">
+              <option value="1:1">1:1</option>
+              <option value="16:9">16:9</option>
+              <option value="4:3">4:3</option>
+              <option value="21:9">21:9</option>
+            </select>
+            
+            <button id="orientationToggle" class="orientation-toggle" title="Toggle Orientation">
+              <span class="orientation-icon"></span>
+            </button>
+            
+            <select id="resolutionSelect" class="setting-pill">
+              <option value="small">480p</option>
+              <option value="regular">720p</option>
+              <option value="big">1080p</option>
+            </select>
 
-    <!-- Settings pills - above prompt bar -->
-    <div class="settings-pills">
-      <div class="pill-group">
-        <select id="aspectRatioSelect" class="setting-pill">
-          <option value="1:1">1:1</option>
-          <option value="16:9">16:9</option>
-          <option value="4:3">4:3</option>
-          <option value="21:9">21:9</option>
-        </select>
+            <!-- Compact Duration Pill (visible only in video mode) -->
+            <div class="duration-pill" id="durationPill" style="display: none;">
+              <input type="number" id="videoDuration" min="1" max="10" value="5" />
+              <span class="suffix">s</span>
+            </div>
+          </div>
+        </div>
         
-        <button id="orientationToggle" class="orientation-toggle" title="Toggle Orientation">
-          <span class="orientation-icon">⟲</span>
-        </button>
-        
-        <select id="resolutionSelect" class="setting-pill">
-          <option value="small">480p</option>
-          <option value="regular">720p</option>
-          <option value="big">1080p</option>
-        </select>
-      </div>
-      
-      <!-- Mode toggle - initially hidden, only shows when both frames exist -->
-      <div class="mode-toggle" id="modeToggle" style="display: none;">
-        <button class="mode-btn active" data-mode="image">Image</button>
-        <button class="mode-btn" data-mode="video">Video</button>
-      </div>
-    </div>
+        <!-- Mode toggle - initially hidden, only shows when both frames exist -->
+        <div class="mode-toggle" id="modeToggle" style="display: none;">
+          <button class="mode-btn active" data-mode="image">Image</button>
+          <button class="mode-btn" data-mode="video">Video</button>
+        </div>
 
-    <!-- Prompt bar -->
-    <div class="prompt-bar">
-      <div class="prompt-mode-toggle">
-        <button class="prompt-mode-btn active" data-mode="generate">Generate</button>
-        <button class="prompt-mode-btn" data-mode="edit">Edit</button>
+        <!-- Video controls moved into pill-group as compact duration pill -->
       </div>
-      
-      <input type="text" id="promptInput" placeholder="A cat in a hat..." />
-      <div class="prompt-files" id="promptFiles"></div>
-      <button class="add-btn" id="addBtn">+</button>
-      <button class="play-btn" id="playBtn">▶</button>
+
+      <div class="prompt-bar">
+        <div class="prompt-mode-toggle">
+          <button class="prompt-mode-btn active" data-mode="generate">Generate</button>
+          <button class="prompt-mode-btn" data-mode="edit">Edit</button>
+        </div>
+        
+        <input type="text" id="promptInput" placeholder="A cat in a hat..." />
+        <div class="prompt-files" id="promptFiles"></div>
+        <button class="add-btn" id="addBtn"><span class="icon icon-plus"></span></button>
+        <button class="play-btn" id="playBtn"><span class="icon icon-arrow"></span></button>
+      </div>
     </div>
 
     <!-- File inputs (hidden) -->

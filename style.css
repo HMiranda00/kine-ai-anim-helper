@@ -1,3 +1,23 @@
+.video-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.video-controls label {
+  font-size: 12px;
+  color: var(--border);
+}
+
+.video-controls input[type="number"] {
+  width: 64px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--fg);
+}
 :root {
   --bg: #1a1a1a;
   --fg: #ffffff;
@@ -27,11 +47,13 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: center; /* center main content vertically */
   height: 100vh;
   padding: 20px;
   gap: 20px;
   position: relative;
+  overflow-y: auto;
+  padding-bottom: 32px;
 }
 
 /* Drag & Drop Overlay */
@@ -142,15 +164,36 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 28px;
+  width: 100%;
 }
 
 .canvas-container {
-  display: flex;
-  gap: 20px;
-  align-items: center;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 20px 28px;
+  align-items: center; /* default center; video mode overrides to baseline */
   justify-content: center;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  transition: all 0.2s ease;
+}
+
+.left-column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-self: center;
+}
+
+.video-mode .left-column {
+  align-self: end; /* align bottom with video column only in video mode */
+}
+
+.frames-group {
+  display: flex;
+  gap: 18px;
 }
 
 .canvas-frame {
@@ -169,8 +212,8 @@ html, body {
 }
 
 .canvas-frame canvas {
-  width: 300px;
-  height: 300px;
+  width: 512px;
+  height: 512px;
   border-radius: 16px;
   background: var(--card-bg);
   border: 2px solid transparent;
@@ -202,16 +245,45 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
-  font-weight: bold;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, opacity 0.2s ease;
   opacity: 0;
 }
 
-.canvas-frame:hover .canvas-upload-btn {
-  opacity: 1;
+.canvas-frame:hover .canvas-upload-btn { opacity: 1; }
+.canvas-upload-btn:hover { transform: scale(1.08); }
+.image-actions {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
 }
+
+.image-actions .action-btn { pointer-events: auto; }
+
+.canvas-frame:hover .image-actions { opacity: 1; }
+
+.action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(0,0,0,0.5);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.action-btn:hover { background: rgba(0,0,0,0.7); }
+
+.icon-download { -webkit-mask-image: url('assets/arrow_down.svg'); mask-image: url('assets/arrow_down.svg'); }
+.icon-delete { -webkit-mask-image: url('assets/x.svg'); mask-image: url('assets/x.svg'); }
 
 .canvas-upload-btn:hover {
   transform: scale(1.1);
@@ -226,11 +298,14 @@ html, body {
   opacity: 0;
   transition: opacity 0.2s ease;
   display: flex;
+  pointer-events: none;
 }
 
-.canvas-frame:hover .frame-controls {
-  opacity: 1;
-}
+.frame-indicator { pointer-events: auto; }
+
+.canvas-frame:hover .frame-controls { opacity: 1; }
+.canvas-frame.dual-mode .frame-controls { display: flex; }
+.canvas-frame.dual-mode:hover .frame-controls { opacity: 1; }
 
 .canvas-frame.dual-mode .frame-controls {
   display: flex;
@@ -243,10 +318,10 @@ html, body {
 .frame-indicator {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   background: rgba(0, 0, 0, 0.8);
-  padding: 6px 12px;
-  border-radius: 20px;
+  padding: 4px 8px;
+  border-radius: 14px;
   cursor: pointer;
 }
 
@@ -257,8 +332,8 @@ html, body {
 }
 
 .indicator-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.3);
   transition: background-color 0.2s;
@@ -314,12 +389,31 @@ html, body {
 }
 
 .video-preview video {
-  width: 300px;
-  height: 300px;
+  width: 640px; /* initial; JS overrides responsively */
+  height: 640px; /* initial; JS overrides responsively */
   border-radius: 16px;
   background: var(--card-bg);
   border: 2px solid var(--border);
   object-fit: cover;
+  max-width: 90vw;
+  max-height: 75vh;
+}
+
+/* Emphasis styles when in video mode */
+.video-mode .canvas-frame canvas {
+  width: 320px;
+  height: 320px;
+}
+
+.video-mode .video-preview video {
+  width: 800px;
+  height: 800px;
+  max-width: 90vw;
+  max-height: 75vh;
+}
+
+.video-mode .canvas-container {
+  align-items: end; /* keep bottom-aligned with video player in video mode */
 }
 
 .video-label { display: none; }
@@ -375,37 +469,19 @@ html, body {
 
 /* Image History */
 .image-history {
-  margin: 24px 0;
+  margin: 0;
   width: 100%;
-  max-width: 700px;
+  max-width: 100%;
 }
 
 .history-grid {
   display: flex;
   gap: 12px;
-  overflow-x: auto;
-  overflow-y: hidden;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
   padding: 8px 0;
   width: 100%;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
-
-.history-grid::-webkit-scrollbar {
-  height: 4px;
-}
-
-.history-grid::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.history-grid::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 2px;
-}
-
-.history-grid::-webkit-scrollbar-thumb:hover {
-  background: var(--accent);
 }
 
 .history-item {
@@ -608,23 +684,23 @@ html, body {
 .settings-pills {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 4px;
-  min-width: 500px;
-  max-width: 700px;
-  width: 100%;
+  justify-content: center;
+  gap: 10px;
+  min-width: 300px;
 }
 
 .pill-group {
   display: flex;
-  gap: 6px;
+  gap: 8px;
+  background: var(--card-bg);
+  border-radius: 20px;
+  padding: 4px;
 }
 
 .setting-pill {
-  background: var(--card-bg);
+  background: transparent;
   color: var(--fg);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 16px;
   padding: 6px 12px;
   font-size: 12px;
@@ -637,14 +713,12 @@ html, body {
 }
 
 .setting-pill:hover {
-  border-color: var(--accent);
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .setting-pill:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+  box-shadow: none;
 }
 
 .setting-pill option {
@@ -664,10 +738,44 @@ html, body {
   color: white;
 }
 
-.orientation-toggle {
-  background: var(--card-bg);
-  color: var(--fg);
+/* Duration pill inside settings */
+.duration-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border-radius: 16px;
+  padding: 0 8px;
+  height: 28px;
+}
+
+.duration-pill input[type="number"] {
+  width: 42px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 10px;
   border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--fg);
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.duration-pill input[type="number"]::-webkit-outer-spin-button,
+.duration-pill input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.duration-pill .suffix {
+  font-size: 12px;
+  color: var(--border);
+}
+
+.orientation-toggle {
+  background: transparent;
+  color: var(--fg);
+  border: none;
   border-radius: 16px;
   padding: 6px 8px;
   font-size: 12px;
@@ -682,8 +790,7 @@ html, body {
 }
 
 .orientation-toggle:hover {
-  border-color: var(--accent);
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .orientation-toggle.vertical {
@@ -693,12 +800,19 @@ html, body {
 
 .orientation-icon {
   display: inline-block;
-  transform: rotate(0deg);
-  transition: transform 0.2s ease;
+  width: 18px;
+  height: 12px;
+  border: 2px solid var(--fg);
+  border-radius: 8px;
+  position: relative;
+  transition: all 0.3s ease;
 }
 
+/* remove inner line to keep only the rectangle */
+
 .orientation-toggle.vertical .orientation-icon {
-  transform: rotate(90deg);
+  width: 12px;
+  height: 18px;
 }
 
 /* Prompt Bar */
@@ -713,6 +827,28 @@ html, body {
   max-width: 700px;
   width: 100%;
   min-height: 56px;
+  /* stays inside footer; footer handles sticky */
+}
+
+/* Footer bar grouping settings + prompt */
+.footer-bar {
+  position: sticky;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  z-index: 5;
+}
+
+.footer-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
 }
 
 .prompt-mode-toggle {
@@ -804,6 +940,30 @@ html, body {
   background: #383838;
 }
 
+/* Icon masks for SVG buttons */
+.icon {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  background-color: currentColor; /* icon inherits button text color */
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+}
+
+.icon-plus {
+  -webkit-mask-image: url('assets/plus.svg');
+  mask-image: url('assets/plus.svg');
+}
+
+.icon-arrow {
+  -webkit-mask-image: url('assets/arrow.svg');
+  mask-image: url('assets/arrow.svg');
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .canvas-container {
@@ -818,6 +978,17 @@ html, body {
   
   .prompt-bar {
     min-width: 300px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .video-mode .canvas-frame canvas {
+    width: 280px;
+    height: 280px;
+  }
+  .video-mode .video-preview video {
+    width: 600px;
+    height: 600px;
   }
 }
 
