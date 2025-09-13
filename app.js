@@ -32,7 +32,7 @@ let appState = 'initial'; // 'initial', 'single', 'dual'
 let currentVideo = null; // Store current video URL
 let lastVideoSize = null; // Store last video player pixel dimensions {width,height}
 let globalAspectRatio = '1:1'; // Global aspect ratio setting
-let globalResolution = 'regular'; // Global resolution setting
+let globalResolution = 'big'; // Global resolution setting (default 1080p)
 
 // Canvas helpers
 const canvasStart = document.getElementById('canvasStart');
@@ -132,6 +132,7 @@ function updateUIState() {
   
   const hasStartImage = canvasDisplayImages.start !== null;
   const hasEndImage = canvasDisplayImages.end !== null;
+  const hasAnyImage = hasStartImage || hasEndImage;
   
   // Determine app state
   if (!hasStartImage && !hasEndImage) {
@@ -216,6 +217,16 @@ function updateUIState() {
   const settingsPills = document.querySelector('.settings-pills');
   if (settingsPills) {
     settingsPills.style.display = 'flex';
+  }
+  // Toggle resolution select only in video mode
+  const resolutionSelectEl = document.getElementById('resolutionSelect');
+  if (resolutionSelectEl) {
+    resolutionSelectEl.style.display = currentMode === 'video' ? '' : 'none';
+  }
+  // Show upscale button only if there is an image loaded
+  const upscaleBtn = document.getElementById('upscaleBtn');
+  if (upscaleBtn) {
+    upscaleBtn.style.display = hasAnyImage ? '' : 'none';
   }
   
   // Estado 3 - histórico aparece após 2+ imagens
@@ -869,6 +880,18 @@ document.addEventListener('DOMContentLoaded', () => {
     globalResolution = e.target.value;
   });
   
+  // Upscale button
+  const upscaleBtn = document.getElementById('upscaleBtn');
+  if (upscaleBtn) {
+    upscaleBtn.addEventListener('click', async () => {
+      if (currentMode === 'video') {
+        await upscaleVideoFramesStub();
+        return;
+      }
+      await upscaleActiveCanvas();
+    });
+  }
+  
   // Initialize aspect ratio and canvas dimensions
   globalAspectRatio = getOrientedAspectRatio(aspectRatioSelect.value);
   updateCanvasDimensions();
@@ -894,6 +917,68 @@ document.addEventListener('DOMContentLoaded', () => {
   const durationPill = document.getElementById('durationPill');
   if (durationPill) durationPill.style.display = currentMode === 'video' ? 'flex' : 'none';
 });
+
+// Upscale current active canvas image using bria/increase-resolution
+async function upscaleActiveCanvas() {
+  const upscaleBtn = document.getElementById('upscaleBtn');
+  const canvasFrame = activeCanvas === 'start' ? 
+    document.getElementById('startFrame') : 
+    document.getElementById('endFrame');
+  
+  try {
+    const sourceImageUrl = activeCanvas === 'start' ? canvasImages.start : canvasImages.end;
+    if (!sourceImageUrl) {
+      alert('Selecione uma imagem para fazer upscale primeiro!');
+      return;
+    }
+    
+    showButtonLoading(upscaleBtn, 'Upscaling...');
+    showCanvasLoading(canvasFrame);
+    
+    const input = {
+      image_url: sourceImageUrl,
+      desired_increase: 4,
+      preserve_alpha: true,
+      sync: true,
+      content_moderation: false
+    };
+    
+    console.log('Upscaling with bria/increase-resolution...', input);
+    const outputs = await replicateRun('bria/increase-resolution', input);
+    const imageUrl = Array.isArray(outputs) ? outputs[0] : outputs;
+    
+    if (activeCanvas === 'start') {
+      await drawImageOnCanvas(canvasStart, ctxStart, imageUrl, false);
+      canvasImages.start = imageUrl;
+      canvasDisplayImages.start = imageUrl;
+    } else {
+      await drawImageOnCanvas(canvasEnd, ctxEnd, imageUrl, false);
+      canvasImages.end = imageUrl;
+      canvasDisplayImages.end = imageUrl;
+    }
+    
+    addToHistory(imageUrl);
+    const target = activeCanvas === 'start' ? canvasStart : canvasEnd;
+    target.classList.add('canvas-fade-in');
+    showFinalShimmerEffect(target);
+    updateUIState();
+  } catch (err) {
+    console.error('Error during upscale:', err);
+    alert('Erro ao fazer upscale: ' + err.message);
+  } finally {
+    hideButtonLoading(upscaleBtn);
+    hideCanvasLoading(canvasFrame);
+  }
+}
+
+// Prepare path for video upscale (stub for future model integration)
+async function upscaleVideoFramesStub() {
+  try {
+    alert('Upscale de vídeo será adicionado em breve.');
+  } catch (_) {
+    // no-op
+  }
+}
 
 // Loading state management
 function showCanvasLoading(canvasFrame) {
