@@ -492,6 +492,8 @@ document.addEventListener('DOMContentLoaded', () => {
         promptMode = 'generate';
         promptInput.placeholder = 'Cat running in the park...';
         if (durationPill) durationPill.style.display = 'flex';
+        const promptModeToggleEl = document.querySelector('.prompt-mode-toggle');
+        if (promptModeToggleEl) promptModeToggleEl.classList.remove('is-edit');
       } else {
         // Back to image mode - restore appropriate placeholder
         if (promptMode === 'edit') {
@@ -510,6 +512,21 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Prompt mode toggle (Generate/Edit)
   const promptModeBtns = document.querySelectorAll('.prompt-mode-btn');
+  const promptModeToggleEl = document.querySelector('.prompt-mode-toggle');
+
+  // Helper to size/move indicator to match the active button
+  function updatePromptModeIndicator() {
+    if (!promptModeToggleEl) return;
+    const activeBtn = document.querySelector('.prompt-mode-btn.active');
+    if (!activeBtn) return;
+    const toggleRect = promptModeToggleEl.getBoundingClientRect();
+    const btnRect = activeBtn.getBoundingClientRect();
+    const x = Math.max(0, btnRect.left - toggleRect.left);
+    const w = Math.max(20, btnRect.width);
+    promptModeToggleEl.style.setProperty('--pm-indicator-x', x + 'px');
+    promptModeToggleEl.style.setProperty('--pm-indicator-w', Math.min(w, toggleRect.width - 4) + 'px');
+  }
+
   promptModeBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       promptModeBtns.forEach(b => b.classList.remove('active'));
@@ -523,8 +540,13 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         promptInput.placeholder = 'A cat in a hat...';
       }
+      updatePromptModeIndicator();
     });
   });
+
+  // Initialize indicator on load and on resize (keeps width matching text)
+  updatePromptModeIndicator();
+  window.addEventListener('resize', updatePromptModeIndicator);
   
   // Canvas selection
   document.getElementById('startFrame').addEventListener('click', () => {
@@ -758,6 +780,28 @@ document.addEventListener('DOMContentLoaded', () => {
     fileInput.value = ''; // Reset input
   });
   
+  // Autosize prompt textarea up to 4 lines
+  const promptTextarea = document.getElementById('promptInput');
+  const autosize = () => {
+    if (!promptTextarea) return;
+    promptTextarea.style.height = 'auto';
+    const styles = getComputedStyle(promptTextarea);
+    const lh = parseFloat(styles.lineHeight) || (parseFloat(styles.fontSize) * 1.35);
+    const maxH = Math.ceil(lh * 5 + 4);
+    const minH = Math.ceil(lh + 2);
+    const needed = Math.min(Math.max(promptTextarea.scrollHeight, minH), maxH);
+    promptTextarea.style.height = needed + 'px';
+    const promptBar = document.querySelector('.prompt-bar');
+    if (promptBar) {
+      if (needed > minH + 2) promptBar.classList.add('expanded');
+      else promptBar.classList.remove('expanded');
+    }
+  };
+  if (promptTextarea) {
+    promptTextarea.addEventListener('input', autosize);
+    setTimeout(autosize, 0);
+  }
+
   // Play button
   const playBtn = document.getElementById('playBtn');
   playBtn.addEventListener('click', async () => {
@@ -1382,8 +1426,8 @@ async function generateImageForActiveCanvas(prompt) {
     const input = { 
       prompt, 
       aspect_ratio: globalAspectRatio,
-      // override to highest quality for images regardless of dropdown
-      size: '1080p',
+      // override to highest quality allowed by model enum
+      size: 'big',
       guidance_scale: 2.5
     };
     
