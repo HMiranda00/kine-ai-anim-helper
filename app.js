@@ -7,14 +7,28 @@ function setTokenRaw(_t){}
 async function replicateUpload(file) {
   const form = new FormData();
   form.append('content', file);
-  const res = await fetch('/api/files', { method: 'POST', body: form });
+  const headers = {};
+  // Forward user token in a custom header (backend will proxy safely)
+  if (userReplicateToken) headers['X-Replicate-Token'] = userReplicateToken;
+  else {
+    // No token: prevent call and prompt settings
+    openSettings();
+    throw new Error('Replicate API key is required');
+  }
+  const res = await fetch('/api/files', { method: 'POST', headers, body: form });
   if (!res.ok) throw new Error(`Upload failed: ${res.status} ${await res.text()}`);
   const json = await res.json();
   return json.urls.get;
 }
 
 async function replicateRun(model, input) {
-  const res = await fetch('/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model, input }) });
+  const headers = { 'Content-Type': 'application/json' };
+  if (userReplicateToken) headers['X-Replicate-Token'] = userReplicateToken;
+  else {
+    openSettings();
+    throw new Error('Replicate API key is required');
+  }
+  const res = await fetch('/api/run', { method: 'POST', headers, body: JSON.stringify({ model, input }) });
   if (!res.ok) throw new Error(await res.text());
   const json = await res.json();
   return json.output;
@@ -33,6 +47,9 @@ let currentVideo = null; // Store current video URL
 let lastVideoSize = null; // Store last video player pixel dimensions {width,height}
 let globalAspectRatio = '1:1'; // Global aspect ratio setting
 let globalResolution = 'big'; // Global resolution setting (default 1080p)
+let userReplicateToken = null; // User-provided Replicate API token (memory only unless remembered)
+let isSettingsOpen = false; // avoid repeated prompts/password manager popups
+let hasPromptedForToken = false; // prompt only once per session automatically
 
 // Canvas helpers
 const canvasStart = document.getElementById('canvasStart');
@@ -864,6 +881,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const orientationToggle = document.getElementById('orientationToggle');
   const historyToggle = document.getElementById('historyToggle');
   const closeHistoryBtn = document.getElementById('closeHistoryBtn');
+  const settingsToggle = document.getElementById('settingsToggle');
+  const settingsOverlay = document.getElementById('settingsOverlay');
+  const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+  const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+  const cancelSettingsBtn = document.getElementById('cancelSettingsBtn');
+  const apiKeyInput = document.getElementById('replicateApiKey');
+  const rememberCheckbox = document.getElementById('rememberApiKey');
   
   aspectRatioSelect.addEventListener('change', (e) => {
     globalAspectRatio = getOrientedAspectRatio(e.target.value);
@@ -895,6 +919,83 @@ document.addEventListener('DOMContentLoaded', () => {
       if (gallery) gallery.classList.remove('open');
     });
   }
+  
+  // Minimal settings modal handlers
+  window.openSettings = function openSettings() {
+    if (!settingsOverlay) return;
+    if (isSettingsOpen) return;
+    // Prefill from memory/localStorage without exposing in DOM when not needed
+    const saved = localStorage.getItem('replicate_api_key');
+    if (saved) {
+      apiKeyInput.value = '••••••••••••••'; // masked placeholder
+      rememberCheckbox.checked = true;
+    } else {
+      apiKeyInput.value = '';
+      rememberCheckbox.checked = false;
+    }
+    settingsOverlay.style.display = 'flex';
+    isSettingsOpen = true;
+  }
+  window.closeSettings = function closeSettings() {
+    if (!settingsOverlay) return;
+    settingsOverlay.style.display = 'none';
+    isSettingsOpen = false;
+  }
+  if (settingsToggle) settingsToggle.addEventListener('click', openSettings);
+  if (closeSettingsBtn) closeSettingsBtn.addEventListener('click', closeSettings);
+  if (cancelSettingsBtn) cancelSettingsBtn.addEventListener('click', closeSettings);
+  if (settingsOverlay) settingsOverlay.addEventListener('click', (e) => { if (e.target === settingsOverlay) closeSettings(); });
+  
+  if (saveSettingsBtn) {
+    saveSettingsBtn.addEventListener('click', () => {
+      const saved = localStorage.getItem('replicate_api_key');
+      const inputVal = apiKeyInput.value.trim();
+      let effective = null;
+      // If input shows mask and we had saved token, keep it
+      if (inputVal === '••••••••••••••' && saved) {
+        effective = saved;
+      } else if (inputVal) {
+        effective = inputVal;
+      }
+      userReplicateToken = effective;
+      if (rememberCheckbox.checked && effective) {
+        try {
+          localStorage.setItem('replicate_api_key', effective);
+        } catch (_) {}
+      } else {
+        localStorage.removeItem('replicate_api_key');
+      }
+      // Validate token with a lightweight call to avoid repeated password manager prompts
+      if (effective) {
+        fetch('/api/check-token', { headers: { 'X-Replicate-Token': effective } })
+          .then(async (r) => {
+            if (!r.ok) throw new Error(await r.text());
+            closeSettings();
+          })
+          .catch((err) => {
+            alert('Invalid Replicate API key: ' + (err?.message || ''));
+          });
+      } else {
+        closeSettings();
+      }
+    });
+  }
+  
+  // On load, hydrate from localStorage but never print it into DOM
+  (function hydrateApiKeyFromStorage() {
+    const saved = localStorage.getItem('replicate_api_key');
+    if (saved) {
+      userReplicateToken = saved;
+    }
+  })();
+
+  // If no token found, prompt once at startup to avoid prompting every action
+  setTimeout(() => {
+    if (!userReplicateToken && !hasPromptedForToken) {
+      hasPromptedForToken = true;
+      openSettings();
+    }
+  }, 200);
   
   // Upscale button
   const upscaleBtn = document.getElementById('upscaleBtn');

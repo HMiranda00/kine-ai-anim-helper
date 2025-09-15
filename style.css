@@ -785,6 +785,60 @@ html, body {
   color: white;
 }
 
+/* Settings modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.settings-modal {
+  width: 360px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-header span { font-weight: 600; }
+
+.close-settings {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.settings-body { display: flex; flex-direction: column; gap: 8px; }
+.settings-body label { font-size: 12px; color: #bbb; }
+.settings-body input[type="password"] {
+  background: var(--input-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.remember-row { display: flex; align-items: center; gap: 6px; color: #bbb; font-size: 12px; }
+
+.settings-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
 /* Duration pill inside settings */
 .duration-pill {
   display: flex;

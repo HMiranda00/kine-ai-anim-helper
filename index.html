@@ -102,6 +102,9 @@
             <!-- History pill toggle -->
             <button id="historyToggle" class="setting-pill" title="History">History</button>
 
+            <!-- Settings pill toggle -->
+            <button id="settingsToggle" class="setting-pill" title="Settings">Settings</button>
+
             <!-- Compact Duration Pill (visible only in video mode) -->
             <div class="duration-pill" id="durationPill" style="display: none;">
               <input type="number" id="videoDuration" min="1" max="10" value="5" />
@@ -139,6 +142,27 @@
     <input type="file" id="startFileInput" accept="image/*" style="display: none;" />
     <input type="file" id="endFileInput" accept="image/*" style="display: none;" />
   </main>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="settingsOverlay" style="display: none;">
+    <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="settings-header">
+        <span id="settingsTitle">Settings</span>
+        <button class="close-settings" id="closeSettingsBtn" aria-label="Close">×</button>
+      </div>
+      <div class="settings-body">
+        <label for="replicateApiKey">Replicate API Key</label>
+        <input id="replicateApiKey" type="password" placeholder="r8_..." autocomplete="off" />
+        <label class="remember-row">
+          <input id="rememberApiKey" type="checkbox" /> Remember on this device
+        </label>
+      </div>
+      <div class="settings-actions">
+        <button id="saveSettingsBtn" class="setting-pill">Save</button>
+        <button id="cancelSettingsBtn" class="setting-pill">Cancel</button>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>

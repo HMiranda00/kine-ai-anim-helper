@@ -14,10 +14,7 @@ const app = express();
 const upload = multer();
 
 const REPLICATE_API_BASE = 'https://api.replicate.com/v1';
-const TOKEN = process.env.REPLICATE_API_TOKEN;
-if (!TOKEN) {
-  console.warn('[warn] REPLICATE_API_TOKEN is not set. Set it in .env');
-}
+// No environment token support; require user-provided token via header
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -27,17 +24,37 @@ app.use(express.static(path.join(__dirname)));
 // Health
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
+// Check token validity (lightweight)
+app.get('/api/check-token', async (req, res) => {
+  try {
+    const userToken = req.headers['x-replicate-token'];
+    if (!userToken) return res.status(401).json({ ok: false, error: 'Missing Replicate token' });
+    const r = await fetch(`${REPLICATE_API_BASE}/account`, {
+      headers: { Authorization: `Bearer ${userToken}` }
+    });
+    // 200 means valid; anything else propagate
+    const text = await r.text();
+    if (!r.ok) return res.status(r.status).send(text || 'Invalid token');
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
 // Upload file to Replicate /v1/files
 app.post('/api/files', upload.single('content'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file' });
+    const userToken = req.headers['x-replicate-token'];
+    if (!userToken) return res.status(401).json({ error: 'Missing Replicate token' });
     const form = new FormData();
     const blob = new Blob([req.file.buffer], { type: req.file.mimetype || 'application/octet-stream' });
     form.append('content', blob, req.file.originalname || 'upload.bin');
 
+    const bearer = `Bearer ${userToken}`;
     const r = await fetch(`${REPLICATE_API_BASE}/files`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${TOKEN}` },
+      headers: { Authorization: bearer },
       body: form
     });
     const json = await r.json();
@@ -52,6 +69,8 @@ app.post('/api/files', upload.single('content'), async (req, res) => {
 // Create and wait for a prediction to finish
 app.post('/api/run', async (req, res) => {
   try {
+    const userToken = req.headers['x-replicate-token'];
+    if (!userToken) return res.status(401).json({ error: 'Missing Replicate token' });
     const { model, version, input } = req.body || {};
     if ((!model && !version) || !input) return res.status(400).json({ error: 'model or version and input are required' });
 
@@ -61,9 +80,10 @@ app.post('/api/run', async (req, res) => {
       : `${REPLICATE_API_BASE}/predictions`;
     const payload = model ? { input } : { version, input };
 
+    const bearer = `Bearer ${userToken}`;
     const create = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': bearer, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
     const created = await create.json();
@@ -77,7 +97,7 @@ app.post('/api/run', async (req, res) => {
     while (status === 'starting' || status === 'processing') {
       if (Date.now() - startedAt > timeoutMs) return res.status(504).json({ error: 'Timeout waiting prediction' });
       await new Promise(r => setTimeout(r, 1500));
-      const r = await fetch(url, { headers: { Authorization: `Bearer ${TOKEN}` } });
+      const r = await fetch(url, { headers: { Authorization: bearer } });
       last = await r.json();
       status = last.status;
     }
@@ -92,7 +112,9 @@ app.post('/api/run', async (req, res) => {
 // Optional: pass-through GET for a prediction id
 app.get('/api/predictions/:id', async (req, res) => {
   try {
-    const r = await fetch(`${REPLICATE_API_BASE}/predictions/${req.params.id}`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+    const userToken = req.headers['x-replicate-token'];
+    if (!userToken) return res.status(401).json({ error: 'Missing Replicate token' });
+    const r = await fetch(`${REPLICATE_API_BASE}/predictions/${req.params.id}`, { headers: { Authorization: `Bearer ${userToken}` } });
     const json = await r.json();
     res.status(r.status).json(json);
   } catch (err) {
