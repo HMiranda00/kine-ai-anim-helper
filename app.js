@@ -229,8 +229,7 @@ function updateUIState() {
     upscaleBtn.style.display = hasAnyImage ? '' : 'none';
   }
   
-  // Estado 3 - histórico aparece após 2+ imagens
-  historyElement.style.display = imageHistory.length >= 2 ? 'block' : 'none';
+  // History gallery exists as a slide-out; keep it in DOM always
   updateHistoryDisplay();
 
   // Toggle delete action visibility only when a canvas has an image
@@ -863,6 +862,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const aspectRatioSelect = document.getElementById('aspectRatioSelect');
   const resolutionSelect = document.getElementById('resolutionSelect');
   const orientationToggle = document.getElementById('orientationToggle');
+  const historyToggle = document.getElementById('historyToggle');
+  const closeHistoryBtn = document.getElementById('closeHistoryBtn');
   
   aspectRatioSelect.addEventListener('change', (e) => {
     globalAspectRatio = getOrientedAspectRatio(e.target.value);
@@ -879,6 +880,21 @@ document.addEventListener('DOMContentLoaded', () => {
   resolutionSelect.addEventListener('change', (e) => {
     globalResolution = e.target.value;
   });
+  
+  // History toggle (slide-in/out)
+  if (historyToggle) {
+    historyToggle.addEventListener('click', () => {
+      const gallery = document.getElementById('imageHistory');
+      if (!gallery) return;
+      gallery.classList.toggle('open');
+    });
+  }
+  if (closeHistoryBtn) {
+    closeHistoryBtn.addEventListener('click', () => {
+      const gallery = document.getElementById('imageHistory');
+      if (gallery) gallery.classList.remove('open');
+    });
+  }
   
   // Upscale button
   const upscaleBtn = document.getElementById('upscaleBtn');
@@ -904,6 +920,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Initialize canvas drop zones for history images
   initializeCanvasDropZones();
+  initializeInterCanvasDragAndDrop();
 
   // Ensure video preview matches canvas ratio initially
   computeAndApplyResponsiveLayout();
@@ -1246,6 +1263,39 @@ function initializeCanvasDropZones() {
   });
 }
 
+// Enable drag-and-drop between canvases to duplicate image
+function initializeInterCanvasDragAndDrop() {
+  const startFrame = document.getElementById('startFrame');
+  const endFrame = document.getElementById('endFrame');
+
+  // Make canvases draggable sources
+  [
+    { frame: startFrame, canvas: canvasStart, slot: 'start' },
+    { frame: endFrame, canvas: canvasEnd, slot: 'end' }
+  ].forEach(({ frame, canvas, slot }) => {
+    const canvasEl = canvas; // actual <canvas>
+    canvasEl.setAttribute('draggable', 'true');
+    canvasEl.addEventListener('dragstart', (e) => {
+      const displayUrl = slot === 'start' ? canvasDisplayImages.start : canvasDisplayImages.end;
+      const replicateUrl = slot === 'start' ? canvasImages.start : canvasImages.end;
+      if (!displayUrl && !replicateUrl) {
+        e.preventDefault();
+        return;
+      }
+      e.dataTransfer.setData('image/url', replicateUrl || displayUrl);
+      e.dataTransfer.setData('display/url', displayUrl || replicateUrl);
+      e.dataTransfer.effectAllowed = 'copy';
+      frame.classList.add('dragging');
+    });
+    canvasEl.addEventListener('dragend', () => {
+      frame.classList.remove('dragging');
+    });
+  });
+
+  // Allow dropping onto frames (reusing existing drop handler already supports image/url)
+  ;
+}
+
 // Drag & Drop functionality
 function initializeDragAndDrop() {
   const appContainer = document.querySelector('.app-container');
@@ -1450,7 +1500,11 @@ function canvasToBlob(canvas) {
 
 // Crop from original source image to the target aspect ratio, keeping max native resolution (no downscale)
 async function uploadCroppedSourceToReplicate(slot /* 'start' | 'end' */) {
-  const displayUrl = slot === 'start' ? canvasDisplayImages.start : canvasDisplayImages.end;
+  let displayUrl = slot === 'start' ? canvasDisplayImages.start : canvasDisplayImages.end;
+  // Fallback to replicate URL if display URL is not available
+  if (!displayUrl) {
+    displayUrl = slot === 'start' ? canvasImages.start : canvasImages.end;
+  }
   if (!displayUrl) throw new Error('No image to crop for ' + slot);
   const [ratioW, ratioH] = globalAspectRatio.split(':').map(Number);
   const targetAR = ratioW / ratioH;
@@ -1567,7 +1621,6 @@ async function editImage(prompt) {
     showCanvasLoading(canvasFrame);
     
     // Get the active canvas and upload its cropped content
-    const canvas = activeCanvas === 'start' ? canvasStart : canvasEnd;
     const croppedImageUrl = await uploadCroppedSourceToReplicate(activeCanvas);
     
     // Highest quality settings for Nano-Banana (if supported)
@@ -1600,8 +1653,11 @@ async function generateVideo(prompt) {
   const durationInput = document.getElementById('videoDuration');
   
   try {
-    if (!canvasDisplayImages.start || !canvasDisplayImages.end) {
-      alert('Para gerar vídeo, você precisa de duas imagens (start e end).');
+    // Permitimos 1 frame só: se houver apenas uma imagem, duplicamos para start/end
+    const hasStart = !!(canvasDisplayImages.start || canvasImages.start);
+    const hasEnd = !!(canvasDisplayImages.end || canvasImages.end);
+    if (!hasStart && !hasEnd) {
+      alert('Para gerar vídeo, adicione pelo menos uma imagem.');
       return;
     }
     
@@ -1609,9 +1665,15 @@ async function generateVideo(prompt) {
     showButtonLoading(playBtn, 'Gerando vídeo...');
     showGlobalLoading(videoPreview, 'Gerando vídeo...');
     
-    // Upload cropped canvas images to Replicate
-    const startImageUrl = await uploadCroppedSourceToReplicate('start');
-    const endImageUrl = await uploadCroppedSourceToReplicate('end');
+    // Upload cropped canvas images to Replicate (sem duplicação)
+    let startImageUrl = null;
+    let endImageUrl = null;
+    if (hasStart) {
+      startImageUrl = await uploadCroppedSourceToReplicate('start');
+    }
+    if (hasEnd) {
+      endImageUrl = await uploadCroppedSourceToReplicate('end');
+    }
     
     // Map resolution for video
     const videoResolution = globalResolution === 'big' ? '1080p' : 
@@ -1622,10 +1684,10 @@ async function generateVideo(prompt) {
       duration: Math.min(Math.max(parseInt(durationInput?.value || '5', 10), 1), 10),
       resolution: videoResolution,
       aspect_ratio: globalAspectRatio,
-      camera_fixed: false,
-      image: startImageUrl,
-      last_frame_image: endImageUrl
+      camera_fixed: false
     };
+    if (startImageUrl) input.image = startImageUrl;
+    if (endImageUrl) input.last_frame_image = endImageUrl;
     
     console.log('Generating video with Seedance-1-lite...', input);
     const outputs = await replicateRun('bytedance/seedance-1-lite', input);
