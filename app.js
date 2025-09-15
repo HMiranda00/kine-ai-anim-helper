@@ -77,7 +77,7 @@ let userReplicateToken = null; // User-provided Replicate API token (memory only
 let isSettingsOpen = false; // avoid repeated prompts/password manager popups
 let hasPromptedForToken = false; // prompt only once per session automatically
 let apiMode = 'proxy'; // Only proxy mode supported in production (avoid CORS)
-let apiBase = '/api'; // Proxy base URL (configurable in Settings)
+let apiBase = 'https://uevqchxzbllwdlfkhffp.supabase.co/functions/v1/kine-ai-proxy/api'; // Hardcoded proxy base URL
 
 // Canvas helpers
 const canvasStart = document.getElementById('canvasStart');
@@ -981,8 +981,6 @@ document.addEventListener('DOMContentLoaded', () => {
     saveSettingsBtn.addEventListener('click', () => {
       const saved = localStorage.getItem('replicate_api_key');
       const inputVal = apiKeyInput.value.trim();
-      const proxyValRaw = (apiProxyUrlInput?.value || '').trim();
-      const proxyVal = proxyValRaw ? proxyValRaw.replace(/\/$/, '') : '';
       let effective = null;
       // If input shows mask and we had saved token, keep it
       if (inputVal === '••••••••••••••' && saved) {
@@ -991,15 +989,10 @@ document.addEventListener('DOMContentLoaded', () => {
         effective = inputVal;
       }
       userReplicateToken = effective;
-      if (proxyVal) {
-        localStorage.setItem('replicate_api_proxy_base', proxyVal);
-        apiBase = proxyVal.endsWith('/api') ? proxyVal : `${proxyVal}/api`;
-        apiMode = 'proxy';
-      } else {
-        localStorage.removeItem('replicate_api_proxy_base');
-        apiBase = '/api';
-        apiMode = 'proxy';
-      }
+      // Hardcode proxy base and ignore UI/localStorage for proxy URL
+      try { localStorage.removeItem('replicate_api_proxy_base'); } catch (_) {}
+      apiBase = 'https://uevqchxzbllwdlfkhffp.supabase.co/functions/v1/kine-ai-proxy/api';
+      apiMode = 'proxy';
       if (rememberCheckbox.checked && effective) {
         try {
           localStorage.setItem('replicate_api_key', effective);
@@ -1042,11 +1035,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }, 200);
   
   // Decide API mode: default to proxy to avoid CORS; allow custom proxy via Settings
-  const savedProxy = localStorage.getItem('replicate_api_proxy_base');
-  if (savedProxy) {
-    apiBase = savedProxy.endsWith('/api') ? savedProxy : `${savedProxy}/api`;
-    apiMode = 'proxy';
-  }
+  // Force hardcoded Supabase proxy; ignore any saved proxies
+  try { localStorage.removeItem('replicate_api_proxy_base'); } catch (_) {}
+  apiBase = 'https://uevqchxzbllwdlfkhffp.supabase.co/functions/v1/kine-ai-proxy/api';
+  apiMode = 'proxy';
   
   // Upscale button
   const upscaleBtn = document.getElementById('upscaleBtn');
