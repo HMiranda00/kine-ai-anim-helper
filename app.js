@@ -7,31 +7,57 @@ function setTokenRaw(_t){}
 async function replicateUpload(file) {
   const form = new FormData();
   form.append('content', file);
-  const headers = {};
-  // Forward user token in a custom header (backend will proxy safely)
-  if (userReplicateToken) headers['X-Replicate-Token'] = userReplicateToken;
-  else {
-    // No token: prevent call and prompt settings
-    openSettings();
-    throw new Error('Replicate API key is required');
+  if (!userReplicateToken) { openSettings(); throw new Error('Replicate API key is required'); }
+  if (apiMode === 'proxy') {
+    const headers = { 'X-Replicate-Token': userReplicateToken };
+    const res = await fetch('/api/files', { method: 'POST', headers, body: form });
+    if (!res.ok) throw new Error(`Upload failed: ${res.status} ${await res.text()}`);
+    const json = await res.json();
+    return json.urls.get;
+  } else {
+    const res = await fetch('https://api.replicate.com/v1/files', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${userReplicateToken}` },
+      body: form
+    });
+    if (!res.ok) throw new Error(`Upload failed: ${res.status} ${await res.text()}`);
+    const json = await res.json();
+    return json.urls.get;
   }
-  const res = await fetch('/api/files', { method: 'POST', headers, body: form });
-  if (!res.ok) throw new Error(`Upload failed: ${res.status} ${await res.text()}`);
-  const json = await res.json();
-  return json.urls.get;
 }
 
 async function replicateRun(model, input) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (userReplicateToken) headers['X-Replicate-Token'] = userReplicateToken;
-  else {
-    openSettings();
-    throw new Error('Replicate API key is required');
+  if (!userReplicateToken) { openSettings(); throw new Error('Replicate API key is required'); }
+  if (apiMode === 'proxy') {
+    const headers = { 'Content-Type': 'application/json', 'X-Replicate-Token': userReplicateToken };
+    const res = await fetch('/api/run', { method: 'POST', headers, body: JSON.stringify({ model, input }) });
+    if (!res.ok) throw new Error(await res.text());
+    const json = await res.json();
+    return json.output;
+  } else {
+    // Direct mode: create + poll on client
+    const create = await fetch(`https://api.replicate.com/v1/models/${model}/predictions`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${userReplicateToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input })
+    });
+    const created = await create.json();
+    if (!create.ok) throw new Error(created?.error || JSON.stringify(created));
+    let url = created?.urls?.get;
+    let status = created?.status;
+    let last = created;
+    const startedAt = Date.now();
+    const timeoutMs = 5 * 60 * 1000;
+    while (status === 'starting' || status === 'processing') {
+      if (Date.now() - startedAt > timeoutMs) throw new Error('Timeout waiting prediction');
+      await new Promise(r => setTimeout(r, 1500));
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${userReplicateToken}` } });
+      last = await r.json();
+      status = last.status;
+    }
+    if (status !== 'succeeded') throw new Error(last?.error || JSON.stringify(last));
+    return last.output;
   }
-  const res = await fetch('/api/run', { method: 'POST', headers, body: JSON.stringify({ model, input }) });
-  if (!res.ok) throw new Error(await res.text());
-  const json = await res.json();
-  return json.output;
 }
 
 // UI State Management
@@ -50,6 +76,7 @@ let globalResolution = 'big'; // Global resolution setting (default 1080p)
 let userReplicateToken = null; // User-provided Replicate API token (memory only unless remembered)
 let isSettingsOpen = false; // avoid repeated prompts/password manager popups
 let hasPromptedForToken = false; // prompt only once per session automatically
+let apiMode = 'proxy'; // 'proxy' (backend) or 'direct' (Replicate API)
 
 // Canvas helpers
 const canvasStart = document.getElementById('canvasStart');
@@ -967,7 +994,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       // Validate token with a lightweight call to avoid repeated password manager prompts
       if (effective) {
-        fetch('/api/check-token', { headers: { 'X-Replicate-Token': effective } })
+        const checkUrl = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? '/api/check-token' : null;
+        const check = checkUrl 
+          ? fetch(checkUrl, { headers: { 'X-Replicate-Token': effective } })
+          : fetch('https://api.replicate.com/v1/account', { headers: { Authorization: `Bearer ${effective}` } });
+        check
           .then(async (r) => {
             if (!r.ok) throw new Error(await r.text());
             closeSettings();
@@ -996,6 +1027,11 @@ document.addEventListener('DOMContentLoaded', () => {
       openSettings();
     }
   }, 200);
+  
+  // Decide API mode: use backend proxy locally; use direct on GitHub Pages
+  if (!(location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    apiMode = 'direct';
+  }
   
   // Upscale button
   const upscaleBtn = document.getElementById('upscaleBtn');
