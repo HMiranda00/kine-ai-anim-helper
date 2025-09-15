@@ -18,6 +18,15 @@ const REPLICATE_API_BASE = 'https://api.replicate.com/v1';
 
 app.use(express.json({ limit: '10mb' }));
 
+// CORS for cross-origin deployments (e.g., GitHub Pages calling this proxy)
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Replicate-Token');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 // Static files (serve current directory)
 app.use(express.static(path.join(__dirname)));
 

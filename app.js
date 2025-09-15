@@ -10,7 +10,7 @@ async function replicateUpload(file) {
   if (!userReplicateToken) { openSettings(); throw new Error('Replicate API key is required'); }
   if (apiMode === 'proxy') {
     const headers = { 'X-Replicate-Token': userReplicateToken };
-    const res = await fetch('/api/files', { method: 'POST', headers, body: form });
+    const res = await fetch(`${apiBase}/files`, { method: 'POST', headers, body: form });
     if (!res.ok) throw new Error(`Upload failed: ${res.status} ${await res.text()}`);
     const json = await res.json();
     return json.urls.get;
@@ -30,7 +30,7 @@ async function replicateRun(model, input) {
   if (!userReplicateToken) { openSettings(); throw new Error('Replicate API key is required'); }
   if (apiMode === 'proxy') {
     const headers = { 'Content-Type': 'application/json', 'X-Replicate-Token': userReplicateToken };
-    const res = await fetch('/api/run', { method: 'POST', headers, body: JSON.stringify({ model, input }) });
+    const res = await fetch(`${apiBase}/run`, { method: 'POST', headers, body: JSON.stringify({ model, input }) });
     if (!res.ok) throw new Error(await res.text());
     const json = await res.json();
     return json.output;
@@ -76,7 +76,8 @@ let globalResolution = 'big'; // Global resolution setting (default 1080p)
 let userReplicateToken = null; // User-provided Replicate API token (memory only unless remembered)
 let isSettingsOpen = false; // avoid repeated prompts/password manager popups
 let hasPromptedForToken = false; // prompt only once per session automatically
-let apiMode = 'proxy'; // 'proxy' (backend) or 'direct' (Replicate API)
+let apiMode = 'proxy'; // Only proxy mode supported in production (avoid CORS)
+let apiBase = '/api'; // Proxy base URL (configurable in Settings)
 
 // Canvas helpers
 const canvasStart = document.getElementById('canvasStart');
@@ -915,6 +916,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const cancelSettingsBtn = document.getElementById('cancelSettingsBtn');
   const apiKeyInput = document.getElementById('replicateApiKey');
   const rememberCheckbox = document.getElementById('rememberApiKey');
+  const apiProxyUrlInput = document.getElementById('apiProxyUrl');
   
   aspectRatioSelect.addEventListener('change', (e) => {
     globalAspectRatio = getOrientedAspectRatio(e.target.value);
@@ -953,6 +955,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isSettingsOpen) return;
     // Prefill from memory/localStorage without exposing in DOM when not needed
     const saved = localStorage.getItem('replicate_api_key');
+    const savedProxy = localStorage.getItem('replicate_api_proxy_base');
     if (saved) {
       apiKeyInput.value = '••••••••••••••'; // masked placeholder
       rememberCheckbox.checked = true;
@@ -960,6 +963,7 @@ document.addEventListener('DOMContentLoaded', () => {
       apiKeyInput.value = '';
       rememberCheckbox.checked = false;
     }
+    if (apiProxyUrlInput) apiProxyUrlInput.value = savedProxy || '';
     settingsOverlay.style.display = 'flex';
     isSettingsOpen = true;
   }
@@ -977,6 +981,8 @@ document.addEventListener('DOMContentLoaded', () => {
     saveSettingsBtn.addEventListener('click', () => {
       const saved = localStorage.getItem('replicate_api_key');
       const inputVal = apiKeyInput.value.trim();
+      const proxyValRaw = (apiProxyUrlInput?.value || '').trim();
+      const proxyVal = proxyValRaw ? proxyValRaw.replace(/\/$/, '') : '';
       let effective = null;
       // If input shows mask and we had saved token, keep it
       if (inputVal === '••••••••••••••' && saved) {
@@ -985,6 +991,15 @@ document.addEventListener('DOMContentLoaded', () => {
         effective = inputVal;
       }
       userReplicateToken = effective;
+      if (proxyVal) {
+        localStorage.setItem('replicate_api_proxy_base', proxyVal);
+        apiBase = proxyVal.endsWith('/api') ? proxyVal : `${proxyVal}/api`;
+        apiMode = 'proxy';
+      } else {
+        localStorage.removeItem('replicate_api_proxy_base');
+        apiBase = '/api';
+        apiMode = 'proxy';
+      }
       if (rememberCheckbox.checked && effective) {
         try {
           localStorage.setItem('replicate_api_key', effective);
@@ -994,10 +1009,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       // Validate token with a lightweight call to avoid repeated password manager prompts
       if (effective) {
-        const checkUrl = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? '/api/check-token' : null;
-        const check = checkUrl 
-          ? fetch(checkUrl, { headers: { 'X-Replicate-Token': effective } })
-          : fetch('https://api.replicate.com/v1/account', { headers: { Authorization: `Bearer ${effective}` } });
+        const checkUrl = `${apiBase}/check-token`;
+        const check = fetch(checkUrl, { headers: { 'X-Replicate-Token': effective } });
         check
           .then(async (r) => {
             if (!r.ok) throw new Error(await r.text());
@@ -1028,9 +1041,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, 200);
   
-  // Decide API mode: use backend proxy locally; use direct on GitHub Pages
-  if (!(location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    apiMode = 'direct';
+  // Decide API mode: default to proxy to avoid CORS; allow custom proxy via Settings
+  const savedProxy = localStorage.getItem('replicate_api_proxy_base');
+  if (savedProxy) {
+    apiBase = savedProxy.endsWith('/api') ? savedProxy : `${savedProxy}/api`;
+    apiMode = 'proxy';
   }
   
   // Upscale button
