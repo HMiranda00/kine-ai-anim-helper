@@ -77,7 +77,7 @@ let userReplicateToken = null; // User-provided Replicate API token (memory only
 let isSettingsOpen = false; // avoid repeated prompts/password manager popups
 let hasPromptedForToken = false; // prompt only once per session automatically
 let apiMode = 'proxy'; // Only proxy mode supported in production (avoid CORS)
-let apiBase = 'https://uevqchxzbllwdlfkhffp.supabase.co/functions/v1/kine-ai-proxy/api'; // Hardcoded proxy base URL
+let apiBase = 'https://uevqchxzbllwdlfkhffp.supabase.co/functions/v1/kine-ai-proxy'; // Hardcoded proxy base URL
 
 // Canvas helpers
 const canvasStart = document.getElementById('canvasStart');
@@ -991,7 +991,7 @@ document.addEventListener('DOMContentLoaded', () => {
       userReplicateToken = effective;
       // Hardcode proxy base and ignore UI/localStorage for proxy URL
       try { localStorage.removeItem('replicate_api_proxy_base'); } catch (_) {}
-      apiBase = 'https://uevqchxzbllwdlfkhffp.supabase.co/functions/v1/kine-ai-proxy/api';
+      apiBase = 'https://uevqchxzbllwdlfkhffp.supabase.co/functions/v1/kine-ai-proxy';
       apiMode = 'proxy';
       if (rememberCheckbox.checked && effective) {
         try {
@@ -1037,7 +1037,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Decide API mode: default to proxy to avoid CORS; allow custom proxy via Settings
   // Force hardcoded Supabase proxy; ignore any saved proxies
   try { localStorage.removeItem('replicate_api_proxy_base'); } catch (_) {}
-  apiBase = 'https://uevqchxzbllwdlfkhffp.supabase.co/functions/v1/kine-ai-proxy/api';
+  apiBase = 'https://uevqchxzbllwdlfkhffp.supabase.co/functions/v1/kine-ai-proxy';
   apiMode = 'proxy';
   
   // Upscale button
