@@ -4,6 +4,7 @@ node_modules/
 # env / secrets
 .env
 config.js
+supabase-edge/
 
 # editors / OS
 .vscode/

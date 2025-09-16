@@ -9,7 +9,7 @@ async function replicateUpload(file) {
   form.append('content', file);
   if (!userReplicateToken) { openSettings(); throw new Error('Replicate API key is required'); }
   if (apiMode === 'proxy') {
-    const headers = { 'X-Replicate-Token': userReplicateToken };
+    const headers = { 'X-Replicate-Token': userReplicateToken, 'Authorization': `Bearer ${userReplicateToken}` };
     const res = await fetch(`${apiBase}/files`, { method: 'POST', headers, body: form });
     if (!res.ok) throw new Error(`Upload failed: ${res.status} ${await res.text()}`);
     const json = await res.json();
@@ -29,7 +29,7 @@ async function replicateUpload(file) {
 async function replicateRun(model, input) {
   if (!userReplicateToken) { openSettings(); throw new Error('Replicate API key is required'); }
   if (apiMode === 'proxy') {
-    const headers = { 'Content-Type': 'application/json', 'X-Replicate-Token': userReplicateToken };
+    const headers = { 'Content-Type': 'application/json', 'X-Replicate-Token': userReplicateToken, 'Authorization': `Bearer ${userReplicateToken}` };
     const res = await fetch(`${apiBase}/run`, { method: 'POST', headers, body: JSON.stringify({ model, input }) });
     if (!res.ok) throw new Error(await res.text());
     const json = await res.json();
@@ -1003,7 +1003,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Validate token with a lightweight call to avoid repeated password manager prompts
       if (effective) {
         const checkUrl = `${apiBase}/check-token`;
-        const check = fetch(checkUrl, { headers: { 'X-Replicate-Token': effective } });
+        const check = fetch(checkUrl, { headers: { 'X-Replicate-Token': effective, 'Authorization': `Bearer ${effective}` } });
         check
           .then(async (r) => {
             if (!r.ok) throw new Error(await r.text());
