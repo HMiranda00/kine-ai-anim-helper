@@ -268,6 +268,11 @@ function updateUIState() {
   if (resolutionSelectEl) {
     resolutionSelectEl.style.display = currentMode === 'video' ? '' : 'none';
   }
+  // Toggle video upscale settings only in video mode
+  const videoUpscaleSettings = document.getElementById('videoUpscaleSettings');
+  if (videoUpscaleSettings) {
+    videoUpscaleSettings.style.display = currentMode === 'video' ? '' : 'none';
+  }
   // Show upscale button only if there is an image loaded
   const upscaleBtn = document.getElementById('upscaleBtn');
   if (upscaleBtn) {
@@ -860,6 +865,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Play button
   const playBtn = document.getElementById('playBtn');
   playBtn.addEventListener('click', async () => {
+    // Re-sincroniza o canvas ativo com o que está visualmente selecionado
+    try {
+      const startFrameEl = document.getElementById('startFrame');
+      const endFrameEl = document.getElementById('endFrame');
+      if (startFrameEl?.classList.contains('active')) activeCanvas = 'start';
+      else if (endFrameEl?.classList.contains('active')) activeCanvas = 'end';
+    } catch (_) {}
+
     const prompt = document.getElementById('promptInput').value.trim();
     if (!prompt) {
       alert('Digite um prompt primeiro!');
@@ -906,6 +919,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Aspect ratio and resolution dropdowns
   const aspectRatioSelect = document.getElementById('aspectRatioSelect');
   const resolutionSelect = document.getElementById('resolutionSelect');
+  const videoUpscaleResolution = document.getElementById('videoUpscaleResolution');
+  const videoUpscaleFps = document.getElementById('videoUpscaleFps');
   const orientationToggle = document.getElementById('orientationToggle');
   const historyToggle = document.getElementById('historyToggle');
   const closeHistoryBtn = document.getElementById('closeHistoryBtn');
@@ -933,6 +948,17 @@ document.addEventListener('DOMContentLoaded', () => {
   resolutionSelect.addEventListener('change', (e) => {
     globalResolution = e.target.value;
   });
+
+  // Video upscale settings: ensure bounds
+  if (videoUpscaleResolution) {
+    videoUpscaleResolution.addEventListener('change', () => {});
+  }
+  if (videoUpscaleFps) {
+    videoUpscaleFps.addEventListener('change', (e) => {
+      const v = parseInt(e.target.value || '30', 10);
+      e.target.value = String(Math.max(15, Math.min(60, isNaN(v) ? 30 : v)));
+    });
+  }
   
   // History toggle (slide-in/out)
   if (historyToggle) {
@@ -1045,7 +1071,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (upscaleBtn) {
     upscaleBtn.addEventListener('click', async () => {
       if (currentMode === 'video') {
-        await upscaleVideoFramesStub();
+        await upscaleVideo();
         return;
       }
       await upscaleActiveCanvas();
@@ -1132,12 +1158,59 @@ async function upscaleActiveCanvas() {
   }
 }
 
-// Prepare path for video upscale (stub for future model integration)
-async function upscaleVideoFramesStub() {
+// Video Upscale using topazlabs/video-upscale
+async function upscaleVideo() {
+  const upscaleBtn = document.getElementById('upscaleBtn');
+  const videoPreview = document.getElementById('videoPreview');
+  const videoPlayer = document.getElementById('videoPlayer');
+  const videoUpscaleResolution = document.getElementById('videoUpscaleResolution');
+  const videoUpscaleFps = document.getElementById('videoUpscaleFps');
+
   try {
-    alert('Upscale de vídeo será adicionado em breve.');
-  } catch (_) {
-    // no-op
+    const sourceVideoUrl = currentMode === 'video' ? (currentVideo || videoPlayer?.src) : null;
+    if (!sourceVideoUrl) {
+      alert('Nenhum vídeo disponível para upscale. Gere um vídeo primeiro.');
+      return;
+    }
+
+    // Show loading states
+    showButtonLoading(upscaleBtn, 'Upscaling...');
+    showGlobalLoading(videoPreview, 'Upscaling...');
+
+    // Read Topaz settings from UI (fallback to sane defaults)
+    let target_resolution = (videoUpscaleResolution?.value || '1080p');
+    if (!['720p','1080p','4k'].includes(target_resolution)) target_resolution = '1080p';
+    let target_fps = parseInt(videoUpscaleFps?.value || '30', 10);
+    if (isNaN(target_fps)) target_fps = 30;
+    target_fps = Math.max(15, Math.min(60, target_fps));
+
+    const input = { video: sourceVideoUrl, target_fps, target_resolution };
+
+    console.log('Upscaling video with topazlabs/video-upscale...', input);
+    const output = await replicateRun('topazlabs/video-upscale', input);
+    const upscaledUrl = Array.isArray(output) ? output[0] : output;
+
+    // Update player and state
+    videoPlayer.src = upscaledUrl;
+    videoPlayer.loop = true;
+    videoPlayer.muted = true;
+    videoPlayer.play().catch(() => {});
+    currentVideo = upscaledUrl;
+    if (videoPlayer.videoWidth && videoPlayer.videoHeight) {
+      lastVideoSize = { width: videoPlayer.clientWidth, height: videoPlayer.clientHeight };
+    } else {
+      videoPlayer.onloadedmetadata = () => {
+        lastVideoSize = { width: videoPlayer.clientWidth, height: videoPlayer.clientHeight };
+      };
+    }
+
+    updateUIState();
+  } catch (err) {
+    console.error('Error during video upscale:', err);
+    alert('Erro ao fazer upscale do vídeo: ' + err.message);
+  } finally {
+    hideButtonLoading(upscaleBtn);
+    hideGlobalLoading(videoPreview);
   }
 }
 

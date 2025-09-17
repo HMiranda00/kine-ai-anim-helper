@@ -1,3 +1,9 @@
+/* Video Upscale settings group */
+.video-upscale-settings {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 .video-controls {
   display: flex;
   align-items: center;

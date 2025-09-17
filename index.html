@@ -96,6 +96,16 @@
               <option value="big" selected>1080p</option>
             </select>
 
+            <!-- Video Upscale Settings (visible only in video mode) -->
+            <div id="videoUpscaleSettings" class="video-upscale-settings" style="display: none;">
+              <select id="videoUpscaleResolution" class="setting-pill" title="Upscale Resolution">
+                <option value="720p">720p</option>
+                <option value="1080p" selected>1080p</option>
+                <option value="4k">4k</option>
+              </select>
+              <input id="videoUpscaleFps" class="setting-pill" type="number" min="15" max="60" value="30" title="Target FPS" />
+            </div>
+
             <!-- Upscale button -->
             <button id="upscaleBtn" class="setting-pill" title="Upscale 4x">Upscale 4x</button>
 
